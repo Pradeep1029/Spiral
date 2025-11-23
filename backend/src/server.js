@@ -16,6 +16,8 @@ const { initializeScheduler } = require('./services/schedulerService');
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const onboardingRoutes = require('./routes/onboardingRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
+const insightsRoutes = require('./routes/insightsRoutes');
 const spiralRoutes = require('./routes/spiralRoutes');
 const checkInRoutes = require('./routes/checkInRoutes');
 const compassionRoutes = require('./routes/compassionRoutes');
@@ -99,6 +101,12 @@ const API_VERSION = '/api/v1';
 
 app.use(`${API_VERSION}/auth`, authRoutes);
 app.use(`${API_VERSION}/onboarding`, apiLimiter, onboardingRoutes);
+
+// New AI-first routes
+app.use(`${API_VERSION}/sessions`, apiLimiter, sessionRoutes);
+app.use(`${API_VERSION}/insights`, apiLimiter, insightsRoutes);
+
+// Legacy routes (keep for backward compatibility)
 app.use(`${API_VERSION}/spirals`, apiLimiter, spiralRoutes);
 app.use(`${API_VERSION}/checkins`, apiLimiter, checkInRoutes);
 app.use(`${API_VERSION}/compassion`, apiLimiter, compassionRoutes);
@@ -128,7 +136,7 @@ app.use(errorHandler);
 // Start server
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`
     ╔═══════════════════════════════════════╗
     ║                                       ║

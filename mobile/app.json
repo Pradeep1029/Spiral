@@ -4,7 +4,11 @@
     "slug": "unspiral",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "jsEngine": "hermes",
     "splash": {
       "resizeMode": "contain",
@@ -28,7 +32,8 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font"
     ]
   }
 }

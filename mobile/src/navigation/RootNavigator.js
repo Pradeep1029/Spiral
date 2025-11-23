@@ -7,14 +7,11 @@ import SplashScreen from '../screens/SplashScreen';
 import OnboardingPatternsScreen from '../screens/OnboardingPatternsScreen';
 import OnboardingTimingScreen from '../screens/OnboardingTimingScreen';
 import OnboardingTopicsScreen from '../screens/OnboardingTopicsScreen';
-import HomeScreen from '../screens/HomeScreen';
-import SpiralRescueScreen from '../screens/SpiralRescueScreen';
-import SelfCompassionScreen from '../screens/SelfCompassionScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import ProgressScreen from '../screens/ProgressScreen';
+import NewHomeScreen from '../screens/NewHomeScreen';
+import ChatScreen from '../screens/ChatScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SafetyScreen from '../screens/SafetyScreen';
-import QuickCheckInScreen from '../screens/QuickCheckInScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -25,24 +22,22 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#050814',
-          borderTopColor: 'rgba(255,255,255,0.08)',
+          backgroundColor: '#0f0c29',
+          borderTopColor: 'rgba(255,255,255,0.1)',
         },
-        tabBarActiveTintColor: '#F9E66A',
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.5)',
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
         tabBarIcon: ({ color, size }) => {
           let iconName = 'ellipse';
           if (route.name === 'Home') iconName = 'moon';
-          else if (route.name === 'History') iconName = 'time';
-          else if (route.name === 'Progress') iconName = 'stats-chart';
+          else if (route.name === 'Insights') iconName = 'stats-chart';
           else if (route.name === 'Settings') iconName = 'settings';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="History" component={HistoryScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
+      <Tab.Screen name="Home" component={NewHomeScreen} options={{ title: 'Unspiral' }} />
+      <Tab.Screen name="Insights" component={InsightsScreen} options={{ title: 'Brain Map' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -69,13 +64,7 @@ export default function RootNavigator() {
           <Stack.Screen name="MainTabs" component={MainTabs} />
         </>
       )}
-      <Stack.Screen name="SpiralRescue" component={SpiralRescueScreen} />
-      <Stack.Screen name="QuickCheckIn" component={QuickCheckInScreen} />
-      <Stack.Screen
-        name="SelfCompassion"
-        component={SelfCompassionScreen}
-        options={{ presentation: 'modal' }}
-      />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen
         name="Safety"
         component={SafetyScreen}

@@ -50,18 +50,50 @@ const userSchema = new mongoose.Schema({
     completedAt: Date,
   },
   
-  // User preferences
-  preferences: {
-    defaultSpiralPath: {
+  // User profile & preferences (AI-driven personalization)
+  profile: {
+    displayName: String,
+    
+    // Spiral topics (updated from onboarding + AI classification)
+    spiralTopics: [{
       type: String,
-      enum: ['think_through', 'let_go'],
-      default: 'think_through',
+      enum: ['work', 'relationships', 'money', 'health', 'self', 'other'],
+    }],
+    
+    // Input preferences
+    preferredInputMode: {
+      type: String,
+      enum: ['text', 'voice', 'either'],
+      default: 'either',
     },
-    enableNotifications: {
+    
+    // AI style preferences (learned over time)
+    preferredStyle: {
+      type: String,
+      enum: ['logic', 'compassion', 'short', 'long', 'unknown'],
+      default: 'unknown',
+    },
+    
+    // Learned dislikes (AI updates these)
+    hatesBreathingExercises: {
+      type: Boolean,
+      default: false,
+    },
+    prefersLogicOverVisualization: {
+      type: Boolean,
+      default: false,
+    },
+    likesSelfCompassion: {
+      type: Boolean,
+      default: false,
+    },
+    
+    // Notification preferences
+    nightlyCheckinEnabled: {
       type: Boolean,
       default: true,
     },
-    checkInTime: {
+    nightlyCheckinTime: {
       type: String,
       default: '22:30',
     },

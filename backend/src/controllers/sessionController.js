@@ -1,0 +1,264 @@
+const Session = require('../models/Session');
+const Message = require('../models/Message');
+const Feedback = require('../models/Feedback');
+const { generateResponse } = require('../services/llmOrchestrator');
+const logger = require('../config/logger');
+
+/**
+ * Create a new session
+ * POST /sessions
+ */
+exports.createSession = async (req, res, next) => {
+  try {
+    const { context = 'spiral' } = req.body;
+
+    const session = await Session.create({
+      user: req.user.id,
+      context,
+      startedAt: new Date(),
+    });
+
+    // Generate initial AI greeting based on context
+    const greetingMessages = {
+      spiral: "Hey, I'm here.\n\nYou don't have to phrase it perfectly.\n\nJust tell me what's going on or what your brain is yelling at you right now.",
+      checkin: "How are you doing tonight?",
+      self_compassion: "You're being hard on yourself. I get it.\n\nTell me what's happening.",
+    };
+
+    const aiGreeting = greetingMessages[context] || greetingMessages.spiral;
+
+    // Save AI's first message
+    await Message.create({
+      session: session._id,
+      user: req.user.id,
+      sender: 'ai',
+      role: 'assistant',
+      content: aiGreeting,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Session created',
+      data: {
+        session: {
+          id: session._id,
+          context: session.context,
+          startedAt: session.startedAt,
+        },
+        initialMessage: aiGreeting,
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating session:', error);
+    next(error);
+  }
+};
+
+/**
+ * Send a message and get AI response
+ * POST /sessions/:id/messages
+ */
+exports.sendMessage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { content, audioUrl, audioTranscript } = req.body;
+
+    const session = await Session.findById(id);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found',
+      });
+    }
+
+    // Check ownership
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized',
+      });
+    }
+
+    // Save user message
+    const userMessage = await Message.create({
+      session: session._id,
+      user: req.user.id,
+      sender: 'user',
+      role: 'user',
+      content: content || audioTranscript,
+      audioUrl,
+      audioTranscript,
+    });
+
+    // Get conversation history
+    const messages = await Message.find({ session: session._id })
+      .sort({ createdAt: 1 })
+      .limit(20) // Keep last 20 messages for context
+      .select('role content');
+
+    const conversationHistory = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // Get user profile for personalization
+    const user = await req.user.populate('profile');
+    const userProfile = user.profile || {};
+
+    // Generate AI response
+    const aiResponse = await generateResponse(
+      session._id,
+      req.user.id,
+      conversationHistory,
+      userProfile
+    );
+
+    // Save AI message
+    const aiMessage = await Message.create({
+      session: session._id,
+      user: req.user.id,
+      sender: 'ai',
+      role: 'assistant',
+      content: aiResponse.content,
+      metadata: aiResponse.functionCall || {},
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        userMessage: {
+          id: userMessage._id,
+          content: userMessage.content,
+          createdAt: userMessage.createdAt,
+        },
+        aiMessage: {
+          id: aiMessage._id,
+          content: aiMessage.content,
+          createdAt: aiMessage.createdAt,
+        },
+        functionCall: aiResponse.functionCall,
+      },
+    });
+  } catch (error) {
+    logger.error('Error sending message:', error);
+    next(error);
+  }
+};
+
+/**
+ * Get user's sessions
+ * GET /sessions
+ */
+exports.getSessions = async (req, res, next) => {
+  try {
+    const { limit = 20, skip = 0 } = req.query;
+
+    const sessions = await Session.find({ user: req.user.id })
+      .sort({ startedAt: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .select('context topic emotion startedAt endedAt initialIntensity finalIntensity outcome interventionsUsed');
+
+    const total = await Session.countDocuments({ user: req.user.id });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sessions,
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          skip: parseInt(skip),
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Error fetching sessions:', error);
+    next(error);
+  }
+};
+
+/**
+ * Get session details with messages
+ * GET /sessions/:id
+ */
+exports.getSession = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const session = await Session.findById(id);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found',
+      });
+    }
+
+    // Check ownership
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized',
+      });
+    }
+
+    // Get messages
+    const messages = await Message.find({ session: session._id })
+      .sort({ createdAt: 1 })
+      .select('sender content audioUrl createdAt');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        session,
+        messages,
+      },
+    });
+  } catch (error) {
+    logger.error('Error fetching session:', error);
+    next(error);
+  }
+};
+
+/**
+ * Submit feedback for session
+ * POST /sessions/:id/feedback
+ */
+exports.submitFeedback = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    const session = await Session.findById(id);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found',
+      });
+    }
+
+    // Check ownership
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized',
+      });
+    }
+
+    // Create or update feedback
+    const feedback = await Feedback.findOneAndUpdate(
+      { session: session._id, user: req.user.id },
+      { rating, comment },
+      { upsert: true, new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Feedback submitted',
+      data: { feedback },
+    });
+  } catch (error) {
+    logger.error('Error submitting feedback:', error);
+    next(error);
+  }
+};
