@@ -25,12 +25,23 @@ export default function OnboardingTopicsScreen({ route, navigation }) {
   };
 
   const handleFinish = async () => {
-    await completeOnboarding({
-      spiralPatterns,
-      spiralTiming,
-      spiralTopics: selected,
-    });
-    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    try {
+      console.log('Completing onboarding with:', {
+        spiralPatterns,
+        spiralTiming,
+        spiralTopics: selected,
+      });
+      await completeOnboarding({
+        spiralPatterns,
+        spiralTiming,
+        spiralTopics: selected,
+      });
+      console.log('Onboarding complete, navigating to MainTabs');
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      alert('Failed to complete onboarding: ' + error.message);
+    }
   };
 
   return (
