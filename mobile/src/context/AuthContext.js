@@ -18,11 +18,9 @@ export function AuthProvider({ children }) {
           setToken(storedToken);
           setAuthToken(storedToken);
           await fetchUser();
-        } else {
-          await createAnonymousUser();
         }
       } catch (e) {
-        await createAnonymousUser();
+        console.error('Init error:', e);
       } finally {
         setLoading(false);
       }
@@ -31,21 +29,32 @@ export function AuthProvider({ children }) {
     init();
   }, []);
 
-  const createAnonymousUser = async () => {
-    const res = await api.post('/auth/anonymous');
-    const newToken = res.data.data.token;
-    setToken(newToken);
-    setAuthToken(newToken);
-    await AsyncStorage.setItem('authToken', newToken);
-    setUser(res.data.data.user);
-    setOnboardingCompleted(res.data.data.user?.onboarding?.completed ?? false);
+  const fetchUser = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      const currentUser = res.data.data?.user || res.data.data;
+      setUser(currentUser);
+      setOnboardingCompleted(currentUser?.onboarding?.completed ?? false);
+    } catch (error) {
+      console.error('Fetch user error:', error);
+      // If token is invalid, clear it
+      await logout();
+    }
   };
 
-  const fetchUser = async () => {
-    const res = await api.get('/auth/me');
-    const currentUser = res.data.data?.user || res.data.data;
-    setUser(currentUser);
-    setOnboardingCompleted(currentUser?.onboarding?.completed ?? false);
+  const login = async (newToken, userData) => {
+    setToken(newToken);
+    setAuthToken(newToken);
+    setUser(userData);
+    setOnboardingCompleted(userData?.onboarding?.completed ?? false);
+  };
+
+  const logout = async () => {
+    await AsyncStorage.removeItem('authToken');
+    setToken(null);
+    setAuthToken(null);
+    setUser(null);
+    setOnboardingCompleted(false);
   };
 
   const completeOnboarding = async (payload) => {
@@ -62,6 +71,8 @@ export function AuthProvider({ children }) {
     onboardingCompleted,
     completeOnboarding,
     refreshUser: fetchUser,
+    login,
+    logout,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -7,6 +7,8 @@ import SplashScreen from '../screens/SplashScreen';
 import OnboardingPatternsScreen from '../screens/OnboardingPatternsScreen';
 import OnboardingTimingScreen from '../screens/OnboardingTimingScreen';
 import OnboardingTopicsScreen from '../screens/OnboardingTopicsScreen';
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import NewHomeScreen from '../screens/NewHomeScreen';
 import FlowScreen from '../screens/FlowScreen';
 import InsightsScreen from '../screens/InsightsScreen';
@@ -44,12 +46,27 @@ function MainTabs() {
 }
 
 export default function RootNavigator() {
-  const { loading, onboardingCompleted } = useAuth();
+  const { loading, onboardingCompleted, token, login } = useAuth();
 
   if (loading) {
     return <SplashScreen />;
   }
 
+  // Not logged in - show auth screens
+  if (!token) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Login">
+          {(props) => <LoginScreen {...props} onLoginSuccess={login} />}
+        </Stack.Screen>
+        <Stack.Screen name="Signup">
+          {(props) => <SignupScreen {...props} onSignupSuccess={login} />}
+        </Stack.Screen>
+      </Stack.Navigator>
+    );
+  }
+
+  // Logged in - show app
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!onboardingCompleted ? (
