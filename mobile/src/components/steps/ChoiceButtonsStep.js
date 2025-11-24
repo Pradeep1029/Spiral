@@ -11,6 +11,29 @@ export default function ChoiceButtonsStep({ step, onAnswerChange }) {
     onAnswerChange({ choice_id: choiceId });
   };
 
+  // If no choices, show error
+  if (!choices || choices.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>{step.title}</Text>
+        {step.subtitle && (
+          <Text style={styles.subtitle}>{step.subtitle}</Text>
+        )}
+        {step.description && (
+          <Text style={styles.description}>{step.description}</Text>
+        )}
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            No options available. This step needs configuration.
+          </Text>
+          <Text style={styles.errorHint}>
+            Tap "Skip" or "Next" to continue.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{step.title}</Text>
@@ -103,5 +126,24 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
     marginTop: 8,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+    marginTop: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorHint: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.5)',
+    textAlign: 'center',
   },
 });

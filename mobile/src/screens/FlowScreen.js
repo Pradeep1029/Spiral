@@ -87,10 +87,18 @@ export default function FlowScreen({ route, navigation }) {
     try {
       setLoading(true);
       
+      console.log('Submitting answer:', {
+        sessionId,
+        stepId: currentStep.step_id,
+        answer: currentAnswer,
+      });
+      
       const response = await api.post(
         `/sessions/${sessionId}/steps/${currentStep.step_id}/answer`,
         { answer: currentAnswer }
       );
+
+      console.log('Answer submitted successfully');
 
       // Check if crisis was detected
       if (response.data.crisis_detected) {
@@ -103,7 +111,8 @@ export default function FlowScreen({ route, navigation }) {
       await fetchNextStep();
     } catch (error) {
       console.error('Error submitting answer:', error);
-      alert('Failed to submit. Please try again.');
+      console.error('Error details:', error.response?.data);
+      alert(`Failed to submit: ${error.response?.data?.message || error.message}`);
       setLoading(false);
     }
   };

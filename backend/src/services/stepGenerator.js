@@ -31,6 +31,16 @@ Flow Strategy:
   - Mixed/overwhelmed → grounding_5_4_3_2_1 → choice_buttons → branch accordingly
 - END: Always finish with summary
 
+🎯 CRITICAL PERSONALIZATION RULES:
+1. In CBT questions: Reference user's SPECIFIC worry topics (money, relationships, work, etc.)
+   - BAD: "What evidence do you have for that thought?"
+   - GOOD: "What actual evidence do you have that you'll run out of money?" (if their topic is money)
+2. In titles/descriptions: Acknowledge their specific patterns
+   - If they obsess over mistakes: "Let's look at that mistake differently"
+   - If they worry about tomorrow: "Ground yourself in this moment"
+3. In reframes: Address their ACTUAL stated worry, not generic anxiety
+4. Keep language conversational, specific, and validating
+
 Available Step Types:
 - intro: Welcome, orientation
 - intensity_scale: 1-10 slider
@@ -39,6 +49,7 @@ Available Step Types:
 - dump_text: Vent in text
 - dump_voice: Voice vent
 - choice_buttons: Let user steer ("Calm body" vs "Unpack thought")
+  REQUIRED: Must include "choices" array in ui.props with format: [{id: "choice_1", label: "Label", description?: "optional"}]
 - cbt_question: One targeted CBT question
 - reframe_review: Show balanced thought, let them tweak
 - self_compassion_script: Practice kind phrase
@@ -140,15 +151,63 @@ function buildStepContext(session, previousSteps, userProfile) {
   if (session.initialIntensity) lines.push(`Initial Intensity: ${session.initialIntensity}/10`);
   if (session.sleepRelated) lines.push(`Sleep context: User is trying to sleep`);
 
-  // User profile
+  // User onboarding data - CRITICAL CONTEXT
+  if (userProfile.onboarding) {
+    const onb = userProfile.onboarding;
+    lines.push(`\n=== USER'S SPIRAL PATTERNS ===`);
+    
+    if (onb.spiralPatterns && onb.spiralPatterns.length > 0) {
+      lines.push(`Common patterns: ${onb.spiralPatterns.join(', ')}`);
+      // Add specific advice based on patterns
+      if (onb.spiralPatterns.includes('replay_conversations')) {
+        lines.push(`⚠️ User replays conversations - address rumination`);
+      }
+      if (onb.spiralPatterns.includes('obsess_mistakes')) {
+        lines.push(`⚠️ User obsesses over mistakes - use CBT reframe`);
+      }
+      if (onb.spiralPatterns.includes('worry_tomorrow')) {
+        lines.push(`⚠️ User worries about tomorrow - ground in present`);
+      }
+      if (onb.spiralPatterns.includes('failure_thoughts')) {
+        lines.push(`⚠️ User has failure thoughts - counter with self-compassion`);
+      }
+    }
+    
+    if (onb.spiralTopics && onb.spiralTopics.length > 0) {
+      lines.push(`\n=== USER'S WORRY TOPICS ===`);
+      lines.push(`Main worries: ${onb.spiralTopics.join(', ')}`);
+      lines.push(`🎯 IMPORTANT: Reference these topics specifically in your interventions!`);
+      
+      // Give specific guidance
+      if (onb.spiralTopics.includes('money')) {
+        lines.push(`- Money stress: Ask about specific financial worry, validate stress, help separate catastrophic thoughts from reality`);
+      }
+      if (onb.spiralTopics.includes('relationships')) {
+        lines.push(`- Relationship concerns: Address fear of conflict/rejection, validate feelings`);
+      }
+      if (onb.spiralTopics.includes('work')) {
+        lines.push(`- Work stress: Address perfectionism, fear of failure, validation of effort`);
+      }
+      if (onb.spiralTopics.includes('health')) {
+        lines.push(`- Health anxiety: Ground catastrophic thinking, differentiate worry from facts`);
+      }
+    }
+    
+    if (onb.spiralTiming) {
+      lines.push(`\nSpiral timing: ${onb.spiralTiming}`);
+    }
+  }
+
+  // User preferences
+  lines.push(`\n=== USER PREFERENCES ===`);
   if (userProfile.hatesBreathingExercises) {
-    lines.push(`Preference: User dislikes breathing exercises - use grounding instead`);
+    lines.push(`- Dislikes breathing exercises → use grounding instead`);
   }
   if (userProfile.prefersLogicOverVisualization) {
-    lines.push(`Preference: User prefers logical/CBT approach`);
+    lines.push(`- Prefers logical/CBT approach → more questions, less imagery`);
   }
   if (userProfile.likesSelfCompassion) {
-    lines.push(`Preference: User responds well to self-compassion`);
+    lines.push(`- Responds well to self-compassion → include kind phrases`);
   }
 
   // Previous steps
@@ -236,6 +295,34 @@ function enrichStep(stepJSON, stepIndex, session) {
   // Skippable defaults
   if (stepJSON.skippable === undefined) {
     stepJSON.skippable = ['breathing', 'grounding_5_4_3_2_1'].includes(stepJSON.step_type);
+  }
+
+  // Validate choice_buttons has choices
+  if (stepJSON.step_type === 'choice_buttons') {
+    if (!stepJSON.ui) stepJSON.ui = {};
+    if (!stepJSON.ui.props) stepJSON.ui.props = {};
+    if (!stepJSON.ui.props.choices || stepJSON.ui.props.choices.length === 0) {
+      // Provide default choices
+      stepJSON.ui.props.choices = [
+        { id: 'calm_body', label: 'Calm my body first', description: 'Breathing or grounding' },
+        { id: 'unpack_thought', label: 'Unpack the thought', description: 'Question what I\'m telling myself' },
+      ];
+    }
+  }
+
+  // Validate breathing has breath_count
+  if (stepJSON.step_type === 'breathing') {
+    if (!stepJSON.ui) stepJSON.ui = {};
+    if (!stepJSON.ui.props) stepJSON.ui.props = {};
+    if (!stepJSON.ui.props.breath_count) {
+      stepJSON.ui.props.breath_count = 4;
+    }
+    if (!stepJSON.ui.props.inhale_sec) {
+      stepJSON.ui.props.inhale_sec = 4;
+    }
+    if (!stepJSON.ui.props.exhale_sec) {
+      stepJSON.ui.props.exhale_sec = 6;
+    }
   }
 
   return stepJSON;

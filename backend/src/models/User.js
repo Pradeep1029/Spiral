@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
     default: true,
   },
   
-  // Onboarding data
+  // Onboarding data (UPGRADED)
   onboarding: {
     completed: {
       type: Boolean,
@@ -37,16 +37,36 @@ const userSchema = new mongoose.Schema({
     },
     spiralPatterns: [{
       type: String,
-      enum: ['replay_conversations', 'obsess_mistakes', 'worry_tomorrow', 'failure_thoughts'],
+      enum: [
+        'replay_conversations',
+        'obsess_mistakes',
+        'worry_tomorrow',
+        'failure_thoughts',
+        'anger_at_others',
+        'health_anxiety',
+        'existential_thinking'
+      ],
     }],
     spiralTiming: {
       type: String,
-      enum: ['before_sleep', 'middle_night', 'random'],
+      enum: ['late_night', 'before_sleep', 'random', 'morning', 'other'],
     },
     spiralTopics: [{
       type: String,
-      enum: ['work_study', 'relationships', 'money', 'health', 'myself'],
+      enum: ['work', 'relationships', 'money', 'health', 'family', 'self_worth', 'life_direction', 'other'],
     }],
+    emotionalFlavors: [{
+      type: String,
+      enum: ['anxiety', 'shame', 'sadness', 'anger', 'guilt', 'mixed'],
+    }],
+    helpPreference: {
+      type: String,
+      enum: ['help_me_think_more_clearly', 'help_me_be_kinder_to_myself', 'help_me_calm_my_body', 'not_sure'],
+    },
+    effortTolerance: {
+      type: String,
+      enum: ['dont_mind_questions', 'keep_it_short_at_night'],
+    },
     completedAt: Date,
   },
   

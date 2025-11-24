@@ -93,13 +93,17 @@ exports.updatePreferences = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.getPreferences = asyncHandler(async (req, res) => {
+  // Handle case where preferences or profile might not exist
+  const preferences = req.user.preferences || {};
+  const profile = req.user.profile || {};
+  
   sendSuccess(res, {
     preferences: {
-      enableNotifications: req.user.preferences.enableNotifications,
-      checkInTime: req.user.preferences.checkInTime,
-      timezone: req.user.preferences.timezone,
+      enableNotifications: preferences.enableNotifications || profile.nightlyCheckinEnabled || true,
+      checkInTime: preferences.checkInTime || profile.nightlyCheckinTime || '22:30',
+      timezone: preferences.timezone || profile.timezone || 'UTC',
     },
-    hasTokens: req.user.pushTokens.length > 0,
+    hasTokens: req.user.pushTokens?.length > 0 || false,
   }, 'Preferences retrieved');
 });
 

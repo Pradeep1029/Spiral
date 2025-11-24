@@ -2,44 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 
 export default function BreathingStep({ step, onAnswerChange }) {
-  const [phase, setPhase] = useState('inhale'); // 'inhale' or 'exhale'
+  const [phase, setPhase] = useState('inhale');
   const [breathCount, setBreathCount] = useState(0);
-  const [secondsElapsed, setSecondsElapsed] = useState(0);
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0.3)).current;
+  const animationRef = useRef(null);
 
   const props = step.ui?.props || {};
-  const duration = props.duration_sec || 60;
+  const targetBreaths = props.breath_count || 4;
   const inhaleTime = props.inhale_sec || 4;
   const exhaleTime = props.exhale_sec || 6;
-  const totalBreathTime = inhaleTime + exhaleTime;
 
   useEffect(() => {
-    // Timer for tracking elapsed time
-    const timer = setInterval(() => {
-      setSecondsElapsed(prev => {
-        const newTime = prev + 1;
-        if (newTime >= duration) {
-          // Auto-complete after duration
-          onAnswerChange({
-            completed: true,
-            duration_completed_sec: duration,
-            breaths_completed: breathCount,
-          });
-        }
-        return newTime;
-      });
-    }, 1000);
+    let isActive = true;
 
-    return () => clearInterval(timer);
-  }, [duration, breathCount]);
+    // Set initial answer
+    onAnswerChange({
+      completed: false,
+      breaths_completed: 0,
+    });
 
-  useEffect(() => {
-    // Breathing animation loop
-    const animate = () => {
-      // Inhale phase
+    const runBreathCycle = () => {
+      if (!isActive) return;
+
+      // Inhale
       setPhase('inhale');
-      Animated.parallel([
+      const inhaleAnim = Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 1,
           duration: inhaleTime * 1000,
@@ -50,10 +38,14 @@ export default function BreathingStep({ step, onAnswerChange }) {
           duration: inhaleTime * 1000,
           useNativeDriver: true,
         }),
-      ]).start(() => {
-        // Exhale phase
+      ]);
+
+      inhaleAnim.start(({ finished }) => {
+        if (!finished || !isActive) return;
+
+        // Exhale
         setPhase('exhale');
-        Animated.parallel([
+        const exhaleAnim = Animated.parallel([
           Animated.timing(scaleAnim, {
             toValue: 0.5,
             duration: exhaleTime * 1000,
@@ -64,24 +56,40 @@ export default function BreathingStep({ step, onAnswerChange }) {
             duration: exhaleTime * 1000,
             useNativeDriver: true,
           }),
-        ]).start(() => {
-          setBreathCount(prev => prev + 1);
-          if (secondsElapsed < duration) {
-            animate(); // Loop
-          }
+        ]);
+
+        exhaleAnim.start(({ finished }) => {
+          if (!finished || !isActive) return;
+
+          // Increment breath count
+          setBreathCount(prev => {
+            const newCount = prev + 1;
+            
+            // Update answer
+            onAnswerChange({
+              completed: newCount >= targetBreaths,
+              breaths_completed: newCount,
+            });
+
+            // Continue or stop
+            if (newCount < targetBreaths) {
+              runBreathCycle();
+            }
+            
+            return newCount;
+          });
         });
       });
     };
 
-    animate();
-  }, [breathCount]);
+    // Start animation
+    runBreathCycle();
 
-  // Set answer on mount so button is enabled
-  useEffect(() => {
-    onAnswerChange({
-      completed: false,
-      duration_completed_sec: 0,
-    });
+    return () => {
+      isActive = false;
+      scaleAnim.stopAnimation();
+      opacityAnim.stopAnimation();
+    };
   }, []);
 
   return (
@@ -116,21 +124,23 @@ export default function BreathingStep({ step, onAnswerChange }) {
       </View>
 
       <View style={styles.progressContainer}>
-        <Text style={styles.timeText}>
-          {secondsElapsed}s / {duration}s
+        <Text style={styles.progressText}>
+          {breathCount} of {targetBreaths} breaths
         </Text>
         <View style={styles.progressBar}>
           <View
             style={[
               styles.progressFill,
-              { width: `${(secondsElapsed / duration) * 100}%` },
+              { width: `${(breathCount / targetBreaths) * 100}%` },
             ]}
           />
         </View>
       </View>
 
       <Text style={styles.hint}>
-        Follow the circle. You can stop anytime by tapping "Next" or "Skip".
+        {breathCount >= targetBreaths 
+          ? "Great! Tap 'Next' when you're ready." 
+          : "Follow the circle. Breathe with it."}
       </Text>
     </View>
   );
@@ -193,11 +203,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 16,
   },
-  timeText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
+  progressText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     marginBottom: 8,
+    fontWeight: '500',
   },
   progressBar: {
     width: '100%',

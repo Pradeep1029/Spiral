@@ -1,7 +1,74 @@
 const Session = require('../models/Session');
 const SessionStep = require('../models/SessionStep');
-const { generateNextStep, detectCrisis, generateCrisisStep } = require('../services/stepGenerator');
+const { generateNextStep } = require('../services/stepGenerator_v2');
+const { getCurrentMethod, advanceToNextMethod } = require('../services/microPlanGenerator');
 const logger = require('../config/logger');
+
+/**
+ * Detect crisis language in user input
+ */
+function detectCrisis(answer) {
+  const text = JSON.stringify(answer).toLowerCase();
+  const crisisKeywords = [
+    'kill myself',
+    'end my life',
+    'suicide',
+    'suicidal',
+    'hurt myself',
+    'self harm',
+    'self-harm',
+    'don\'t want to live',
+    'better off dead',
+    'want to die',
+  ];
+
+  return crisisKeywords.some(keyword => text.includes(keyword));
+}
+
+/**
+ * Generate crisis info step
+ */
+function generateCrisisStep(stepIndex) {
+  return {
+    step_id: `crisis-${Date.now()}`,
+    step_type: 'crisis_info',
+    title: "I'm here, but I need you to know something important",
+    subtitle: null,
+    description: "Unspiral is not an emergency service. If you're in immediate danger or having thoughts of suicide, please reach out to a crisis resource right now.",
+    ui: {
+      component: 'CrisisInfo',
+      props: {
+        resources: [
+          {
+            name: '988 Suicide & Crisis Lifeline',
+            phone: '988',
+            description: 'Call or text 988 - Available 24/7',
+          },
+          {
+            name: 'Crisis Text Line',
+            phone: '741741',
+            description: 'Text HOME to 741741 - Available 24/7',
+          },
+          {
+            name: 'Emergency Services',
+            phone: '911',
+            description: 'For immediate danger',
+          },
+        ],
+      },
+    },
+    skippable: false,
+    primary_cta: { label: 'I understand', action: 'acknowledge' },
+    secondary_cta: null,
+    meta: {
+      intervention_type: 'crisis',
+      estimated_duration_sec: 60,
+      show_progress: false,
+      step_index: stepIndex + 1,
+      step_count: stepIndex + 1,
+    },
+  };
+}
 
 /**
  * Get next step in flow
@@ -86,6 +153,17 @@ exports.submitStepAnswer = async (req, res, next) => {
   try {
     const { id, stepId } = req.params;
     const { answer } = req.body;
+
+    logger.info(`Submitting answer for session ${id}, step ${stepId}`, {
+      answer: JSON.stringify(answer).substring(0, 200),
+    });
+
+    if (!answer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Answer is required',
+      });
+    }
 
     const session = await Session.findById(id);
     if (!session) {
@@ -177,8 +255,7 @@ async function handleSpecialStepLogic(step, session, answer) {
 
     case 'dump_text':
     case 'dump_voice':
-      // This is where we might trigger classification
-      // For now, just log
+      // Venting step - classification will happen on next step request
       logger.info(`User vented: ${step.stepType}`, {
         sessionId: session._id,
       });
@@ -191,12 +268,83 @@ async function handleSpecialStepLogic(step, session, answer) {
       });
       break;
 
+    case 'reframe_review':
+    case 'self_compassion_script':
+    case 'action_plan':
+    case 'sleep_wind_down':
+      // These steps typically complete a method - advance to next method
+      await checkAndAdvanceMethod(session, step.stepType);
+      break;
+
     case 'summary':
       // Mark session as ended
       session.endedAt = new Date();
       session.outcome = 'calmer'; // Default, could be determined by final intensity
       await session.save();
       break;
+  }
+}
+
+/**
+ * Check if current method is complete and advance to next
+ */
+async function checkAndAdvanceMethod(session, completedStepType) {
+  if (!session.microPlan || session.microPlan.length === 0) {
+    return; // No micro plan yet
+  }
+
+  const { currentMethod } = getCurrentMethod(session);
+  let shouldAdvance = false;
+
+  // Determine if this step completes the current method
+  switch (currentMethod) {
+    case 'brief_cbt':
+      // brief_cbt is complete after reframe_review
+      if (completedStepType === 'reframe_review') {
+        shouldAdvance = true;
+      }
+      break;
+
+    case 'self_compassion':
+      if (completedStepType === 'self_compassion_script') {
+        shouldAdvance = true;
+      }
+      break;
+
+    case 'defusion':
+      // Defusion is typically one cbt_question
+      if (completedStepType === 'cbt_question') {
+        shouldAdvance = true;
+      }
+      break;
+
+    case 'behavioral_micro_plan':
+      if (completedStepType === 'action_plan') {
+        shouldAdvance = true;
+      }
+      break;
+
+    case 'sleep_wind_down':
+      if (completedStepType === 'sleep_wind_down') {
+        shouldAdvance = true;
+      }
+      break;
+
+    case 'breathing':
+    case 'grounding':
+    case 'expressive_release':
+    case 'acceptance_values':
+      // These are typically one step
+      shouldAdvance = true;
+      break;
+  }
+
+  if (shouldAdvance) {
+    await advanceToNextMethod(session);
+    logger.info('Advanced to next method', {
+      sessionId: session._id,
+      completedMethod: currentMethod,
+    });
   }
 }
 

@@ -23,7 +23,82 @@ const sessionSchema = new mongoose.Schema({
   },
   endedAt: Date,
   
-  // Classification (filled by AI)
+  // UPGRADED: Multi-dimensional classification (filled by AI)
+  classification: {
+    topics: {
+      type: mongoose.Schema.Types.Mixed, // { work: 0.3, relationships: 0.8, self_worth: 0.9 }
+      default: {},
+    },
+    thoughtForm: {
+      type: String,
+      enum: ['worry', 'rumination', 'self_criticism', 'anger', 'grief', 'existential', 'mixed'],
+    },
+    primaryEmotions: [{
+      type: String,
+      enum: ['anxiety', 'shame', 'sadness', 'anger', 'guilt', 'mixed'],
+    }],
+    intensity: {
+      type: Number,
+      min: 1,
+      max: 10,
+    },
+    context: {
+      timeOfDay: {
+        type: String,
+        enum: ['morning', 'afternoon', 'evening', 'late_night'],
+      },
+      sleepRelated: {
+        type: Boolean,
+        default: false,
+      },
+      acuteTrigger: String, // free text if detected
+    },
+    cognitiveCapacity: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+      default: 'medium',
+    },
+    recommendedStrategies: [{
+      type: String,
+      enum: [
+        'breathing',
+        'grounding',
+        'expressive_release',
+        'brief_cbt',
+        'deep_cbt',
+        'defusion',
+        'self_compassion',
+        'behavioral_micro_plan',
+        'sleep_wind_down',
+        'acceptance_values'
+      ],
+    }],
+    classifiedAt: Date,
+  },
+  
+  // Micro plan (sequence of methods for this session)
+  microPlan: [{
+    type: String,
+    enum: [
+      'breathing',
+      'grounding',
+      'expressive_release',
+      'brief_cbt',
+      'deep_cbt',
+      'defusion',
+      'self_compassion',
+      'behavioral_micro_plan',
+      'sleep_wind_down',
+      'acceptance_values',
+      'summary'
+    ],
+  }],
+  currentMethodIndex: {
+    type: Number,
+    default: 0,
+  },
+  
+  // Legacy fields (kept for backwards compatibility)
   topic: {
     type: String,
     enum: ['work', 'relationships', 'money', 'health', 'self', 'other', 'unknown'],
@@ -69,12 +144,14 @@ const sessionSchema = new mongoose.Schema({
     enum: [
       'breathing',
       'grounding',
+      'expressive_writing',
       'cbt_question',
       'reframe',
       'self_compassion',
       'defusion',
       'sleep_wind_down',
       'action_plan',
+      'acceptance_values',
     ],
   }],
   
