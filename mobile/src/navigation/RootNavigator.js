@@ -8,7 +8,7 @@ import OnboardingPatternsScreen from '../screens/OnboardingPatternsScreen';
 import OnboardingTimingScreen from '../screens/OnboardingTimingScreen';
 import OnboardingTopicsScreen from '../screens/OnboardingTopicsScreen';
 import NewHomeScreen from '../screens/NewHomeScreen';
-import ChatScreen from '../screens/ChatScreen';
+import FlowScreen from '../screens/FlowScreen';
 import InsightsScreen from '../screens/InsightsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SafetyScreen from '../screens/SafetyScreen';
@@ -64,7 +64,7 @@ export default function RootNavigator() {
           <Stack.Screen name="MainTabs" component={MainTabs} />
         </>
       )}
-      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Flow" component={FlowScreen} />
       <Stack.Screen
         name="Safety"
         component={SafetyScreen}

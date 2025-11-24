@@ -11,13 +11,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 export default function NewHomeScreen({ navigation }) {
   const handleSpiraling = async () => {
-    // Navigate to chat session
-    navigation.navigate('Chat', { context: 'spiral' });
+    // Navigate to flow session
+    navigation.navigate('Flow', { context: 'spiral' });
   };
 
   const handleHarshOnSelf = async () => {
-    // Navigate to self-compassion chat
-    navigation.navigate('Chat', { context: 'self_compassion' });
+    // Navigate to self-compassion flow
+    navigation.navigate('Flow', { context: 'self_compassion' });
   };
 
   const handleCrisis = () => {

@@ -8,6 +8,10 @@ const {
   getSession,
   submitFeedback,
 } = require('../controllers/sessionController');
+const {
+  getNextStep,
+  submitStepAnswer,
+} = require('../controllers/stepController');
 
 // All routes require authentication
 router.use(protect);
@@ -17,7 +21,11 @@ router.post('/', createSession);
 router.get('/', getSessions);
 router.get('/:id', getSession);
 
-// Message route
+// Step-based flow routes (NEW)
+router.get('/:id/next_step', getNextStep);
+router.post('/:id/steps/:stepId/answer', submitStepAnswer);
+
+// Message route (legacy chat-based)
 router.post('/:id/messages', sendMessage);
 
 // Feedback route
