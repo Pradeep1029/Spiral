@@ -31,7 +31,7 @@ const authValidators = {
       .isLength({ min: 6 })
       .withMessage('Password must be at least 6 characters long'),
   ],
-  
+
   login: [
     body('email')
       .optional()
@@ -78,14 +78,14 @@ const onboardingValidators = {
 const spiralValidators = {
   start: [
     body('intensityBefore')
-      .isInt({ min: 1, max: 5 })
-      .withMessage('Intensity must be between 1 and 5'),
+      .isInt({ min: 1, max: 10 })
+      .withMessage('Intensity must be between 1 and 10'),
     body('primaryTopic')
       .optional()
       .isIn(['work_study', 'relationships', 'money', 'health', 'myself', 'other'])
       .withMessage('Invalid primary topic'),
   ],
-  
+
   updateStep: [
     param('id')
       .isMongoId()
@@ -94,16 +94,16 @@ const spiralValidators = {
       .isInt({ min: 1, max: 4 })
       .withMessage('Step number must be between 1 and 4'),
   ],
-  
+
   complete: [
     param('id')
       .isMongoId()
       .withMessage('Invalid session ID'),
-    body('intensityAfter')
-      .isInt({ min: 1, max: 5 })
-      .withMessage('Intensity must be between 1 and 5'),
+    body('finalMood')
+      .isInt({ min: 1, max: 10 })
+      .withMessage('Final mood must be between 1 and 10'),
     body('nextAction')
-      .isIn(['try_sleep', 'calm_more'])
+      .isIn(['try_sleep', 'calm_more', 'sleep', 'continue'])
       .withMessage('Invalid next action'),
   ],
 };
@@ -163,7 +163,7 @@ const notificationValidators = {
       .isIn(['ios', 'android', 'web'])
       .withMessage('Invalid platform'),
   ],
-  
+
   updatePreferences: [
     body('enableNotifications')
       .optional()

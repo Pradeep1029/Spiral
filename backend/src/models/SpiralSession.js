@@ -7,7 +7,7 @@ const spiralSessionSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
-  
+
   // Session metadata
   status: {
     type: String,
@@ -20,7 +20,7 @@ const spiralSessionSchema = new mongoose.Schema({
   },
   completedAt: Date,
   duration: Number, // in seconds
-  
+
   // Step 1: Ground the body
   step1_breathing: {
     completed: {
@@ -34,113 +34,112 @@ const spiralSessionSchema = new mongoose.Schema({
     duration: Number,
     completedAt: Date,
   },
-  
-  // Step 2: Dump the spiral
+
+  // Step 2: Dump the spiral (Voice & Tags)
   step2_dump: {
     completed: {
       type: Boolean,
       default: false,
     },
-    text: String,
-    audio: String, // URL or reference if audio is used
+    text: String, // Transcribed text or typed text
+    audioUrl: String, // URL to the voice recording
+    isVoiceEntry: {
+      type: Boolean,
+      default: false,
+    },
+    selectedTags: [String], // "Bubble Cloud" selections (emotions/feelings)
     duration: Number,
     completedAt: Date,
-    
-    // AI analysis (optional)
+
+    // AI analysis
     detectedTopics: [String],
     detectedEmotions: [String],
     cognitiveDistortions: [String],
   },
-  
-  // Step 3: Choose path and work through
+
+  // Step 3: Process & Defuse (Gamified)
   step3_exit: {
     completed: {
       type: Boolean,
       default: false,
     },
-    pathChosen: {
+    techniqueUsed: {
       type: String,
-      enum: ['think_through', 'let_go'],
+      enum: ['defusion', 'weighing', 'other'],
     },
-    
-    // For "Think it through" path
-    thinkThrough: {
-      fearQuestion: String, // What exactly are you afraid will happen?
-      evidenceFor: String,  // What evidence do you have that this will happen?
-      evidenceAgainst: String, // What evidence against?
-      
-      // Reframe
-      reframe: String,
-      reframeAccepted: Boolean,
-      reframeEdited: String,
-      
-      // Self-compassion
-      selfCompassionLine: String,
-    },
-    
-    // For "Let it float by" path
-    letGo: {
-      metaphorUsed: {
+
+    // For "Thought Defusion" (Letting go)
+    defusion: {
+      visualTheme: {
         type: String,
-        enum: ['cloud', 'leaf', 'river'],
+        enum: ['clouds', 'leaves', 'balloons'],
       },
-      groundingCompleted: Boolean,
-      groundingAnswers: {
-        see: [String],
-        feel: [String],
-        hear: [String],
-        smell: [String],
-        taste: [String],
+      thoughtsReleased: Number, // Count of thoughts "popped" or floated away
+    },
+
+    // For "Fact Weighing" (Challenging)
+    weighing: {
+      beliefStrengthBefore: {
+        type: Number,
+        min: 0,
+        max: 100,
+      },
+      evidenceFor: [String],
+      evidenceAgainst: [String],
+      beliefStrengthAfter: {
+        type: Number,
+        min: 0,
+        max: 100,
       },
     },
-    
+
     completedAt: Date,
   },
-  
-  // Step 4: Sleep mode & close
+
+  // Step 4: Closing
   step4_close: {
     completed: {
       type: Boolean,
       default: false,
     },
-    feelingAfter: {
+    finalMood: {
       type: Number,
       min: 1,
-      max: 5,
+      max: 10, // Changed to 1-10 for more granularity
     },
     nextAction: {
       type: String,
-      enum: ['try_sleep', 'calm_more'],
+      enum: ['sleep', 'more_breathing', 'journal', 'nothing'],
     },
-    sleepWindDownCompleted: Boolean,
     completedAt: Date,
   },
-  
+
   // Intensity tracking
   intensityBefore: {
     type: Number,
     min: 1,
-    max: 5,
+    max: 10,
+    required: true,
   },
   intensityAfter: {
     type: Number,
     min: 1,
-    max: 5,
+    max: 10,
   },
-  
+
   // Categorization
   primaryTopic: {
     type: String,
     enum: ['work_study', 'relationships', 'money', 'health', 'myself', 'other'],
   },
-  
+
   // Metadata
   deviceInfo: {
     platform: String,
     appVersion: String,
     os: String,
   },
-  
+
 }, {
   timestamps: true,
 });
@@ -151,7 +150,7 @@ spiralSessionSchema.index({ user: 1, status: 1 });
 spiralSessionSchema.index({ startedAt: -1 });
 
 // Calculate duration before saving
-spiralSessionSchema.pre('save', function(next) {
+spiralSessionSchema.pre('save', function (next) {
   if (this.status === 'completed' && this.completedAt && this.startedAt) {
     this.duration = Math.floor((this.completedAt - this.startedAt) / 1000);
   }
@@ -159,9 +158,9 @@ spiralSessionSchema.pre('save', function(next) {
 });
 
 // Method to mark step as complete
-spiralSessionSchema.methods.completeStep = function(stepNumber, stepData) {
+spiralSessionSchema.methods.completeStep = function (stepNumber, stepData) {
   const stepField = `step${stepNumber}_${['breathing', 'dump', 'exit', 'close'][stepNumber - 1]}`;
-  
+
   if (this[stepField]) {
     this[stepField] = {
       ...this[stepField],
@@ -170,28 +169,28 @@ spiralSessionSchema.methods.completeStep = function(stepNumber, stepData) {
       completedAt: new Date(),
     };
   }
-  
+
   return this.save();
 };
 
 // Method to complete entire session
-spiralSessionSchema.methods.completeSession = function(intensityAfter, nextAction) {
+spiralSessionSchema.methods.completeSession = function (intensityAfter, nextAction) {
   this.status = 'completed';
   this.completedAt = new Date();
   this.intensityAfter = intensityAfter;
-  
+
   if (this.step4_close) {
     this.step4_close.completed = true;
     this.step4_close.feelingAfter = intensityAfter;
     this.step4_close.nextAction = nextAction;
     this.step4_close.completedAt = new Date();
   }
-  
+
   return this.save();
 };
 
 // Method to get session summary
-spiralSessionSchema.methods.getSummary = function() {
+spiralSessionSchema.methods.getSummary = function () {
   return {
     id: this._id,
     status: this.status,
@@ -201,9 +200,9 @@ spiralSessionSchema.methods.getSummary = function() {
     intensityBefore: this.intensityBefore,
     intensityAfter: this.intensityAfter,
     primaryTopic: this.primaryTopic,
-    pathChosen: this.step3_exit?.pathChosen,
-    improvement: this.intensityBefore && this.intensityAfter 
-      ? this.intensityBefore - this.intensityAfter 
+    pathChosen: this.step3_exit?.techniqueUsed,
+    improvement: this.intensityBefore && this.step4_close?.finalMood
+      ? this.intensityBefore - this.step4_close.finalMood
       : null,
   };
 };

@@ -1,6 +1,6 @@
 const Session = require('../models/Session');
 const SessionStep = require('../models/SessionStep');
-const { generateNextStep } = require('../services/stepGenerator_v2');
+// const { generateNextStep } = require('../services/stepGenerator_v2'); // DELETED - using SpiralRescueScreen instead
 const { getCurrentMethod, advanceToNextMethod } = require('../services/microPlanGenerator');
 const logger = require('../config/logger');
 
@@ -110,8 +110,13 @@ exports.getNextStep = async (req, res, next) => {
     const user = await req.user.populate('profile');
     const userProfile = user.profile || {};
 
-    // Generate next step
-    const stepData = await generateNextStep(session._id, req.user.id, userProfile);
+    // Generate next step - DISABLED: Using SpiralRescueScreen instead
+    // const stepData = await generateNextStep(session._id, req.user.id, userProfile);
+
+    return res.status(501).json({
+      success: false,
+      message: 'Step-based flow is deprecated. Please use the SpiralRescue screen instead.',
+    });
 
     // Save step to database
     const stepCount = await SessionStep.countDocuments({ session: session._id });
@@ -202,10 +207,10 @@ exports.submitStepAnswer = async (req, res, next) => {
     // Check for crisis language in answer
     if (detectCrisis(answer)) {
       logger.warn(`Crisis language detected in session ${session._id}`);
-      
+
       // Get current step count
       const stepCount = await SessionStep.countDocuments({ session: session._id });
-      
+
       // Create crisis step
       const crisisStepData = generateCrisisStep(stepCount);
       const crisisStep = await SessionStep.create({

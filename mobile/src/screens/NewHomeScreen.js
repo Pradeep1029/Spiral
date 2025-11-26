@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function NewHomeScreen({ navigation }) {
   const handleSpiraling = async () => {
     // Navigate to flow session
-    navigation.navigate('Flow', { context: 'spiral' });
+    navigation.navigate('SpiralRescue');
   };
 
   const handleHarshOnSelf = async () => {
@@ -27,7 +27,7 @@ export default function NewHomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       <LinearGradient
         colors={['#0f0c29', '#302b63', '#24243e']}
         style={styles.gradient}
@@ -49,6 +49,7 @@ export default function NewHomeScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Secondary Action */}
+          {/* Secondary Action - Temporarily removed until Self Compassion flow is rebuilt
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleHarshOnSelf}
@@ -56,6 +57,7 @@ export default function NewHomeScreen({ navigation }) {
           >
             <Text style={styles.secondaryButtonText}>I'm being harsh on myself</Text>
           </TouchableOpacity>
+          */}
 
           {/* Footer */}
           <View style={styles.footer}>

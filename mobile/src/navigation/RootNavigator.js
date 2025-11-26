@@ -10,7 +10,8 @@ import OnboardingTopicsScreen from '../screens/OnboardingTopicsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import NewHomeScreen from '../screens/NewHomeScreen';
-import FlowScreen from '../screens/FlowScreen';
+import SpiralRescueScreen from '../screens/SpiralRescueScreen';
+
 import InsightsScreen from '../screens/InsightsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SafetyScreen from '../screens/SafetyScreen';
@@ -81,7 +82,7 @@ export default function RootNavigator() {
           <Stack.Screen name="MainTabs" component={MainTabs} />
         </>
       )}
-      <Stack.Screen name="Flow" component={FlowScreen} />
+      <Stack.Screen name="SpiralRescue" component={SpiralRescueScreen} />
       <Stack.Screen
         name="Safety"
         component={SafetyScreen}

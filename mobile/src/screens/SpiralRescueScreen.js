@@ -1,43 +1,71 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Dimensions } from 'react-native';
 import Slider from '@react-native-community/slider';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  runOnJS
+} from 'react-native-reanimated';
+import { Audio } from 'expo-av';
+import * as Haptics from 'expo-haptics';
+
 import Screen from '../components/Screen';
 import { Title, Subtitle, Body } from '../components/Typography';
 import PrimaryButton from '../components/PrimaryButton';
 import SecondaryButton from '../components/SecondaryButton';
+import BreathingPacer from '../components/BreathingPacer';
+import VoiceInput from '../components/VoiceInput';
 import api from '../services/api';
 
+const { width, height } = Dimensions.get('window');
+
+const EMOTIONS = [
+  { id: 'anxious', label: 'Anxious', color: '#EF5350' },
+  { id: 'overwhelmed', label: 'Overwhelmed', color: '#AB47BC' },
+  { id: 'sad', label: 'Sad', color: '#5C6BC0' },
+  { id: 'angry', label: 'Angry', color: '#EF5350' },
+  { id: 'lonely', label: 'Lonely', color: '#8D6E63' },
+  { id: 'scared', label: 'Scared', color: '#FFA726' },
+  { id: 'guilty', label: 'Guilty', color: '#78909C' },
+  { id: 'shame', label: 'Shame', color: '#546E7A' },
+];
+
 export default function SpiralRescueScreen({ navigation }) {
-  const [step, setStep] = useState(0); // 0 = intro/intensity, 1-4 = steps
+  const [step, setStep] = useState(0);
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const [intensityBefore, setIntensityBefore] = useState(4);
+  // Step 0: Intensity
+  const [intensityBefore, setIntensityBefore] = useState(5);
 
-  const [dumpText, setDumpText] = useState('');
+  // Step 2: Dump
+  const [audioUri, setAudioUri] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [dumpText, setDumpText] = useState(''); // Fallback text input
 
-  const [path, setPath] = useState('think_through');
-  const [fearQuestion, setFearQuestion] = useState('');
+  // Step 3: Process
+  const [technique, setTechnique] = useState(null); // 'defusion' | 'weighing'
+
+  // Defusion State
+  const [floatingThoughts, setFloatingThoughts] = useState([]);
+
+  // Weighing State
+  const [beliefStrength, setBeliefStrength] = useState(80);
   const [evidenceFor, setEvidenceFor] = useState('');
   const [evidenceAgainst, setEvidenceAgainst] = useState('');
-  const [reframe, setReframe] = useState('');
-  const [reframeAccepted, setReframeAccepted] = useState(false);
-  const [reframeEdited, setReframeEdited] = useState('');
-  const [selfCompassionLine, setSelfCompassionLine] = useState('');
 
-  const [letGoMetaphor, setLetGoMetaphor] = useState('cloud');
-  const [letGoGroundingDone, setLetGoGroundingDone] = useState(false);
-
-  const [intensityAfter, setIntensityAfter] = useState(3);
-  const [nextAction, setNextAction] = useState('try_sleep');
-  const [sleepWindDownCompleted, setSleepWindDownCompleted] = useState(false);
+  // Step 4: Close
+  const [finalMood, setFinalMood] = useState(5);
+  const [nextAction, setNextAction] = useState('sleep');
   const [completed, setCompleted] = useState(false);
 
   const handleStart = async () => {
     try {
       setLoading(true);
-      setError(null);
       const res = await api.post('/spirals/start', {
         intensityBefore: Math.round(intensityBefore),
       });
@@ -58,64 +86,85 @@ export default function SpiralRescueScreen({ navigation }) {
         stepData,
       });
     } catch (e) {
-      // Non-fatal; user experience continues
+      console.log('Step update failed', e);
     }
   };
 
   const handleBreathingNext = async (skipped = false) => {
-    await updateStep(1, {
-      skipped,
-      completed: !skipped,
-    });
+    await updateStep(1, { skipped, completed: !skipped });
     setStep(2);
   };
 
+  const toggleTag = (tag) => {
+    Haptics.selectionAsync();
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
   const handleDumpNext = async () => {
+    let transcribedText = dumpText;
+
+    // If user recorded audio, upload and transcribe it
+    if (audioUri && sessionId) {
+      try {
+        setLoading(true);
+
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('audio', {
+          uri: audioUri,
+          type: 'audio/m4a',
+          name: 'recording.m4a',
+        });
+
+        // Upload and transcribe
+        const response = await api.post(`/spirals/${sessionId}/transcribe`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        transcribedText = response.data.data.text;
+        console.log('Transcription successful:', transcribedText);
+      } catch (error) {
+        console.error('Transcription failed:', error);
+        // Continue with whatever text was entered manually
+      } finally {
+        setLoading(false);
+      }
+    }
+
     await updateStep(2, {
-      text: dumpText,
+      text: transcribedText,
+      audioUrl: audioUri,
+      isVoiceEntry: !!audioUri,
+      selectedTags,
     });
     setStep(3);
   };
 
-  const generateTemplateReframe = () => {
-    const baseAgainst = (evidenceAgainst || 'the story might not be as harsh as it feels').toLowerCase();
-    return (
-      "I get why this feels so intense right now. But looking at it a bit more gently, " +
-      baseAgainst +
-      ". One night or one moment doesnt define all of me."
-    );
+  const addFloatingThought = () => {
+    const text = dumpText || selectedTags[0] || "My Worry";
+    const id = Date.now();
+    setFloatingThoughts([...floatingThoughts, { id, text }]);
   };
 
-  const handleGenerateReframe = () => {
-    const text = generateTemplateReframe();
-    setReframe(text);
-    setReframeEdited(text);
-    setReframeAccepted(true);
-  };
-
-  const handleThinkThroughNext = async () => {
+  const handleProcessNext = async () => {
     await updateStep(3, {
-      pathChosen: 'think_through',
-      thinkThrough: {
-        fearQuestion,
-        evidenceFor,
-        evidenceAgainst,
-        reframe,
-        reframeAccepted,
-        reframeEdited,
-        selfCompassionLine,
-      },
-    });
-    setStep(4);
-  };
-
-  const handleLetGoNext = async () => {
-    await updateStep(3, {
-      pathChosen: 'let_go',
-      letGo: {
-        metaphorUsed: letGoMetaphor,
-        groundingCompleted: letGoGroundingDone,
-      },
+      techniqueUsed: technique,
+      defusion: technique === 'defusion' ? {
+        visualTheme: 'clouds',
+        thoughtsReleased: floatingThoughts.length
+      } : undefined,
+      weighing: technique === 'weighing' ? {
+        beliefStrengthBefore: 80, // mocked for now
+        evidenceFor: [evidenceFor],
+        evidenceAgainst: [evidenceAgainst],
+        beliefStrengthAfter: beliefStrength
+      } : undefined
     });
     setStep(4);
   };
@@ -125,326 +174,240 @@ export default function SpiralRescueScreen({ navigation }) {
     try {
       setLoading(true);
       await api.put(`/spirals/${sessionId}/complete`, {
-        intensityAfter: Math.round(intensityAfter),
+        finalMood: Math.round(finalMood),
         nextAction,
-        sleepWindDownCompleted,
       });
       setCompleted(true);
     } catch (e) {
-      setError('Could not complete session. It will still be saved.');
+      setError('Could not complete session.');
       setCompleted(true);
     } finally {
       setLoading(false);
     }
   };
 
+  // --- Render Steps ---
+
   const renderIntro = () => (
-    <Screen scrollable>
-      <Title>Rescue in progress · Step 0 of 4</Title>
-      <Body style={{ marginBottom: 24 }}>
-        Before we start, how loud does this spiral feel right now?
-      </Body>
-      <Subtitle>Spiral intensity (1–5)</Subtitle>
-      <View style={styles.sliderRow}>
-        <Text style={styles.sliderLabel}>1</Text>
-        <Slider
-          style={{ flex: 1 }}
-          minimumValue={1}
-          maximumValue={5}
-          step={1}
-          value={intensityBefore}
-          minimumTrackTintColor="#F9E66A"
-          maximumTrackTintColor="rgba(255,255,255,0.2)"
-          thumbTintColor="#F9E66A"
-          onValueChange={setIntensityBefore}
+    <Screen>
+      <View style={styles.centerContent}>
+        <Title>Spiral Rescue</Title>
+        <Subtitle style={{ textAlign: 'center', marginTop: 10 }}>
+          Let's slow things down. How loud is the noise right now?
+        </Subtitle>
+
+        <View style={styles.intensityContainer}>
+          <Text style={styles.intensityNumber}>{intensityBefore}</Text>
+          <Slider
+            style={{ width: '100%', height: 40 }}
+            minimumValue={1}
+            maximumValue={10}
+            step={1}
+            value={intensityBefore}
+            minimumTrackTintColor="#FF7043"
+            maximumTrackTintColor="#374151"
+            thumbTintColor="#FF7043"
+            onValueChange={v => {
+              setIntensityBefore(v);
+              Haptics.selectionAsync();
+            }}
+          />
+          <View style={styles.sliderLabels}>
+            <Text style={styles.label}>Quiet</Text>
+            <Text style={styles.label}>Deafening</Text>
+          </View>
+        </View>
+
+        <PrimaryButton
+          label="Start Rescue"
+          onPress={handleStart}
+          disabled={loading}
+          style={{ marginTop: 40 }}
         />
-        <Text style={styles.sliderLabel}>5</Text>
       </View>
-      <Body style={{ marginTop: 8, marginBottom: 32 }}>
-        Right now: {Math.round(intensityBefore)} / 5
-      </Body>
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <PrimaryButton label="Start rescue" onPress={handleStart} disabled={loading} />
     </Screen>
   );
 
   const renderStep1 = () => (
-    <Screen scrollable>
-      <Title>Rescue in progress · Step 1 of 4</Title>
-      <Subtitle>Ground the body</Subtitle>
-      <Body style={{ marginBottom: 24 }}>
-        Lets calm your body first.
-      </Body>
-      <Body>
-        Inhale through the nose… 2… 3… 4…{"\n"}
-        Hold… 2…{"\n"}
-        Exhale… 2… 3… 4… 5… 6…
-      </Body>
-      <Body style={{ marginTop: 16 }}>
-        You can follow this for about a minute, or move on when you feel calm enough.
-      </Body>
-      <PrimaryButton
-        label="Ive done a few breaths"
-        onPress={() => handleBreathingNext(false)}
-        style={{ marginTop: 32 }}
-      />
-      <SecondaryButton
-        label="Skip (Im calm enough)"
-        onPress={() => handleBreathingNext(true)}
-      />
-      <Body style={{ marginTop: 24 }}>
-        Nice. Youre telling your nervous system youre not in danger.
-      </Body>
+    <Screen>
+      <View style={styles.centerContent}>
+        <Title>Breathe</Title>
+        <Subtitle style={{ marginBottom: 30 }}>Sync your breath with the circle.</Subtitle>
+        <BreathingPacer isActive={true} />
+
+        <PrimaryButton
+          label="I feel a bit steadier"
+          onPress={() => handleBreathingNext(false)}
+          style={{ marginTop: 50 }}
+        />
+        <SecondaryButton
+          label="Skip"
+          onPress={() => handleBreathingNext(true)}
+          style={{ marginTop: 10 }}
+        />
+      </View>
     </Screen>
   );
 
   const renderStep2 = () => (
     <Screen scrollable>
-      <Title>Rescue in progress · Step 2 of 4</Title>
-      <Subtitle>Dump the spiral</Subtitle>
-      <Body style={{ marginBottom: 16 }}>
-        Type whatever is looping in your head. It doesnt have to make sense.
-      </Body>
-      <TextInput
-        style={styles.textArea}
-        multiline
-        placeholder="Start typing here..."
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={dumpText}
-        onChangeText={setDumpText}
-      />
-      <PrimaryButton
-        label="Next"
-        onPress={handleDumpNext}
-        disabled={!dumpText.trim()}
-      />
-      <Body style={{ marginTop: 16 }}>
-        Thats enough for now. Lets sort this out together.
-      </Body>
-    </Screen>
-  );
+      <Title>Get it Out</Title>
+      <Subtitle>Speak it or tap what you feel. Don't hold it in.</Subtitle>
 
-  const renderThinkThrough = () => (
-    <Screen scrollable>
-      <Title>Step 3 · Think it through</Title>
-      <Body style={{ marginBottom: 16 }}>
-        Well gently question the story your brain is telling.
-      </Body>
-      <Subtitle>What exactly are you afraid will happen?</Subtitle>
-      <TextInput
-        style={styles.input}
-        placeholder="Im afraid that..."
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={fearQuestion}
-        onChangeText={setFearQuestion}
-      />
-      <Subtitle>What evidence do you have that this will happen?</Subtitle>
-      <TextInput
-        style={styles.input}
-        placeholder="Evidence for..."
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={evidenceFor}
-        onChangeText={setEvidenceFor}
-      />
-      <Subtitle>What evidence do you have that it might not be as bad?</Subtitle>
-      <TextInput
-        style={styles.input}
-        placeholder="Evidence against..."
-        placeholderTextColor="rgba(255,255,255,0.4)"
-        value={evidenceAgainst}
-        onChangeText={setEvidenceAgainst}
-      />
-      {!reframe ? (
-        <PrimaryButton
-          label="Show me a more balanced way to see this"
-          onPress={handleGenerateReframe}
-          style={{ marginTop: 16 }}
-          disabled={!evidenceAgainst.trim()}
-        />
-      ) : (
-        <View style={{ marginTop: 24 }}>
-          <Subtitle>Heres a more balanced way to see this:</Subtitle>
-          <TextInput
-            style={styles.textArea}
-            multiline
-            value={reframeEdited}
-            onChangeText={setReframeEdited}
-          />
-          <Subtitle>If a friend said this, what kind thing would you say back?</Subtitle>
-          <TextInput
-            style={styles.input}
-            placeholder="One kind thing I can say to myself..."
-            placeholderTextColor="rgba(255,255,255,0.4)"
-            value={selfCompassionLine}
-            onChangeText={setSelfCompassionLine}
-          />
-          <PrimaryButton
-            label="Lock this in for tonight"
-            onPress={handleThinkThroughNext}
-            style={{ marginTop: 16 }}
-            disabled={!selfCompassionLine.trim()}
-          />
-        </View>
-      )}
-    </Screen>
-  );
+      <View style={styles.voiceContainer}>
+        <VoiceInput onRecordingComplete={setAudioUri} />
+        {audioUri && <Text style={styles.audioConfirm}>Audio captured</Text>}
+      </View>
 
-  const renderLetGo = () => (
-    <Screen scrollable>
-      <Title>Step 3 · Let it float by</Title>
-      <Body style={{ marginBottom: 16 }}>
-        Youve thought about this enough for tonight. Lets practice not engaging.
-      </Body>
-      <Subtitle>Visual metaphor</Subtitle>
-      <Body style={{ marginBottom: 8 }}>
-        Picture the thought as text on a cloud or leaf. It drifts past; you dont chase it.
-      </Body>
-      <View style={styles.row}>
-        {['cloud', 'leaf', 'river'].map((m) => (
+      <Text style={styles.sectionHeader}>Or tap what you feel:</Text>
+      <View style={styles.bubbleContainer}>
+        {EMOTIONS.map(emo => (
           <Pressable
-            key={m}
-            onPress={() => setLetGoMetaphor(m)}
-            style={[styles.chip, letGoMetaphor === m && styles.chipSelected]}
+            key={emo.id}
+            onPress={() => toggleTag(emo.label)}
+            style={[
+              styles.bubble,
+              selectedTags.includes(emo.label) && { backgroundColor: emo.color, borderColor: emo.color }
+            ]}
           >
-            <Text style={styles.chipLabel}>{m}</Text>
+            <Text style={[
+              styles.bubbleText,
+              selectedTags.includes(emo.label) && { color: 'white', fontWeight: 'bold' }
+            ]}>
+              {emo.label}
+            </Text>
           </Pressable>
         ))}
       </View>
-      <Subtitle style={{ marginTop: 24 }}>5–4–3–2–1 grounding</Subtitle>
-      <Body>
-        • Name 5 things you can see{"\n"}
-        • 4 things you can feel{"\n"}
-        • 3 things you can hear{"\n"}
-        • 2 things you can smell{"\n"}
-        • 1 thing you can taste
-      </Body>
-      <SecondaryButton
-        label="Ive done this"
-        onPress={() => setLetGoGroundingDone(true)}
-        style={{ marginTop: 16 }}
+
+      <Text style={styles.sectionHeader}>Or just type (optional):</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Briefly, what's wrong?"
+        placeholderTextColor="#666"
+        value={dumpText}
+        onChangeText={setDumpText}
       />
+
       <PrimaryButton
         label="Next"
-        onPress={handleLetGoNext}
-        disabled={!letGoGroundingDone}
-        style={{ marginTop: 8 }}
+        onPress={handleDumpNext}
+        style={{ marginTop: 20 }}
       />
     </Screen>
+  );
+
+  const renderDefusion = () => (
+    <View style={{ flex: 1 }}>
+      <Subtitle>Visualize your thoughts floating away like leaves on a stream.</Subtitle>
+      <View style={styles.skyContainer}>
+        {floatingThoughts.map((thought, index) => (
+          <FloatingThought key={thought.id} text={thought.text} index={index} />
+        ))}
+      </View>
+      <SecondaryButton
+        label="+ Release a thought"
+        onPress={() => {
+          addFloatingThought();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        style={{ marginBottom: 10 }}
+      />
+      <PrimaryButton label="I feel lighter" onPress={handleProcessNext} />
+    </View>
+  );
+
+  const renderWeighing = () => (
+    <View>
+      <Subtitle>Let's weigh the evidence.</Subtitle>
+
+      <Text style={styles.label}>Evidence FOR the worry:</Text>
+      <TextInput
+        style={styles.input}
+        multiline
+        value={evidenceFor}
+        onChangeText={setEvidenceFor}
+        placeholder="It might happen because..."
+        placeholderTextColor="#666"
+      />
+
+      <Text style={styles.label}>Evidence AGAINST the worry:</Text>
+      <TextInput
+        style={styles.input}
+        multiline
+        value={evidenceAgainst}
+        onChangeText={setEvidenceAgainst}
+        placeholder="It might not happen because..."
+        placeholderTextColor="#666"
+      />
+
+      <Text style={styles.label}>How true does the worry feel now? ({beliefStrength}%)</Text>
+      <Slider
+        style={{ width: '100%', height: 40 }}
+        minimumValue={0}
+        maximumValue={100}
+        step={5}
+        value={beliefStrength}
+        minimumTrackTintColor="#EF5350"
+        maximumTrackTintColor="#374151"
+        onValueChange={setBeliefStrength}
+      />
+
+      <PrimaryButton label="Done Weighing" onPress={handleProcessNext} style={{ marginTop: 20 }} />
+    </View>
   );
 
   const renderStep3 = () => (
     <Screen scrollable>
-      <Title>Rescue in progress · Step 3 of 4</Title>
-      <Body style={{ marginBottom: 16 }}>
-        Now we have two ways out tonight.
-      </Body>
-      <View style={styles.row}>
-        <Pressable
-          onPress={() => setPath('think_through')}
-          style={[styles.card, path === 'think_through' && styles.cardSelected]}
-        >
-          <Text style={styles.cardTitle}>🧠 Think it through</Text>
-          <Text style={styles.cardText}>
-            Question the thoughts and find a more balanced version.
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setPath('let_go')}
-          style={[styles.card, path === 'let_go' && styles.cardSelected]}
-        >
-          <Text style={styles.cardTitle}>🌊 Let it float by</Text>
-          <Text style={styles.cardText}>
-            Practice not engaging with the thought at all.
-          </Text>
-        </Pressable>
-      </View>
-      <View style={{ marginTop: 24 }}>
-        {path === 'think_through' ? renderThinkThrough() : renderLetGo()}
-      </View>
+      <Title>Process</Title>
+      {!technique ? (
+        <View>
+          <Subtitle>Choose a path for tonight:</Subtitle>
+          <Pressable style={styles.card} onPress={() => setTechnique('defusion')}>
+            <Text style={styles.cardTitle}>🍃 Defusion</Text>
+            <Text style={styles.cardDesc}>Watch thoughts float away. Good for looping worries.</Text>
+          </Pressable>
+          <Pressable style={styles.card} onPress={() => setTechnique('weighing')}>
+            <Text style={styles.cardTitle}>⚖️ Weighing</Text>
+            <Text style={styles.cardDesc}>Check the facts. Good for "what if" scenarios.</Text>
+          </Pressable>
+        </View>
+      ) : (
+        technique === 'defusion' ? renderDefusion() : renderWeighing()
+      )}
     </Screen>
   );
 
   const renderStep4 = () => (
-    <Screen scrollable>
-      <Title>Rescue in progress · Step 4 of 4</Title>
-      <Subtitle>Sleep mode & close</Subtitle>
-      <Body style={{ marginBottom: 16 }}>
-        How do you feel right now?
-      </Body>
-      <Subtitle>Feeling right now (1–5)</Subtitle>
-      <View style={styles.sliderRow}>
-        <Text style={styles.sliderLabel}>1</Text>
-        <Slider
-          style={{ flex: 1 }}
-          minimumValue={1}
-          maximumValue={5}
-          step={1}
-          value={intensityAfter}
-          minimumTrackTintColor="#F9E66A"
-          maximumTrackTintColor="rgba(255,255,255,0.2)"
-          thumbTintColor="#F9E66A"
-          onValueChange={setIntensityAfter}
-        />
-        <Text style={styles.sliderLabel}>5</Text>
-      </View>
-      <Body style={{ marginTop: 8, marginBottom: 24 }}>
-        Now: {Math.round(intensityAfter)} / 5
-      </Body>
-      <Subtitle>What do you want now?</Subtitle>
-      <View style={styles.row}>
-        <Pressable
-          onPress={() => setNextAction('try_sleep')}
-          style={[styles.card, nextAction === 'try_sleep' && styles.cardSelected]}
-        >
-          <Text style={styles.cardTitle}>Try to sleep</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setNextAction('calm_more')}
-          style={[styles.card, nextAction === 'calm_more' && styles.cardSelected]}
-        >
-          <Text style={styles.cardTitle}>Just calm down more</Text>
-        </Pressable>
-      </View>
-      {nextAction === 'try_sleep' ? (
-        <View style={{ marginTop: 24 }}>
-          <Subtitle>2-minute sleep wind-down</Subtitle>
-          <Body>
-            Imagine simple, random things: apple, train, pillow, tree, shoe… just for a second
-            each. Nothing dramatic.
-          </Body>
-          <SecondaryButton
-            label={sleepWindDownCompleted ? 'Wind-down practiced' : 'Ive done a short wind-down'}
-            onPress={() => setSleepWindDownCompleted(true)}
-            style={{ marginTop: 12 }}
+    <Screen>
+      <View style={styles.centerContent}>
+        <Title>Closing</Title>
+        <Subtitle>How are you feeling now?</Subtitle>
+
+        <View style={styles.intensityContainer}>
+          <Text style={styles.intensityNumber}>{finalMood}</Text>
+          <Slider
+            style={{ width: '100%', height: 40 }}
+            minimumValue={1}
+            maximumValue={10}
+            step={1}
+            value={finalMood}
+            minimumTrackTintColor="#66BB6A"
+            maximumTrackTintColor="#374151"
+            thumbTintColor="#66BB6A"
+            onValueChange={setFinalMood}
           />
         </View>
-      ) : (
-        <View style={{ marginTop: 24 }}>
-          <Subtitle>2-minute self-compassion burst</Subtitle>
-          <Body>
-            Hand on chest if that feels okay.{"\n"}
-            This is a hard moment. Hard moments are part of being human. May I be gentle with
-            myself tonight.
-          </Body>
-        </View>
-      )}
-      <PrimaryButton
-        label="Rescue complete"
-        onPress={handleComplete}
-        style={{ marginTop: 32 }}
-      />
-      {completed && (
-        <Body style={{ marginTop: 24 }}>
-          Rescue complete. Youre okay. Sleep if you can; rest if you cant.
-        </Body>
-      )}
-      {completed && (
-        <SecondaryButton
-          label="Back to home"
-          onPress={() => navigation.navigate('Home')}
-          style={{ marginTop: 12 }}
-        />
-      )}
+
+        {!completed ? (
+          <PrimaryButton label="Finish Session" onPress={handleComplete} style={{ marginTop: 30 }} />
+        ) : (
+          <View>
+            <Text style={styles.successText}>Session Saved.</Text>
+            <SecondaryButton label="Back Home" onPress={() => navigation.navigate('Home')} />
+          </View>
+        )}
+      </View>
     </Screen>
   );
 
@@ -457,79 +420,141 @@ export default function SpiralRescueScreen({ navigation }) {
   return null;
 }
 
+// Helper for Defusion Animation
+function FloatingThought({ text, index }) {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const translateX = useSharedValue(0);
+
+  useEffect(() => {
+    translateY.value = withTiming(-400, { duration: 8000 + index * 1000, easing: Easing.linear });
+    translateX.value = withTiming(Math.random() * 100 - 50, { duration: 8000 });
+    opacity.value = withDelay(6000, withTiming(0, { duration: 2000 }));
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }, { translateX: translateX.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.floatingThought, style]}>
+      <Text style={styles.floatingText}>{text}</Text>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
-  sliderRow: {
-    flexDirection: 'row',
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 8,
+    padding: 20,
   },
-  sliderLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    marginHorizontal: 8,
+  intensityContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 30,
   },
-  textArea: {
-    minHeight: 120,
-    borderRadius: 16,
+  intensityNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 10,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 10,
+  },
+  label: {
+    color: '#9CA3AF',
+    marginTop: 10,
+  },
+  voiceContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  audioConfirm: {
+    color: '#66BB6A',
+    marginTop: 10,
+  },
+  bubbleContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  bubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 12,
-    color: '#F7FAFC',
-    backgroundColor: 'rgba(15,23,42,0.8)',
-    marginBottom: 16,
+    borderColor: '#4B5563',
+    backgroundColor: 'rgba(31, 41, 55, 0.5)',
+  },
+  bubbleText: {
+    color: '#D1D5DB',
+    fontSize: 14,
+  },
+  sectionHeader: {
+    color: 'white',
+    fontSize: 16,
+    marginTop: 20,
+    marginBottom: 10,
+    fontWeight: '600',
   },
   input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    padding: 10,
-    color: '#F7FAFC',
-    backgroundColor: 'rgba(15,23,42,0.8)',
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#FCA5A5',
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    backgroundColor: '#1F2937',
+    color: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    minHeight: 50,
   },
   card: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 16,
+    backgroundColor: '#1F2937',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    backgroundColor: 'rgba(15,23,42,0.9)',
-  },
-  cardSelected: {
-    borderColor: '#F9E66A',
-    backgroundColor: 'rgba(249,230,106,0.06)',
+    borderColor: '#374151',
   },
   cardTitle: {
-    color: 'rgba(255,255,255,0.95)',
-    fontWeight: '600',
-    marginBottom: 4,
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
-  cardText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
+  cardDesc: {
+    color: '#9CA3AF',
   },
-  chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    marginRight: 8,
+  skyContainer: {
+    height: 300,
+    backgroundColor: '#111827',
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
-  chipSelected: {
-    borderColor: '#F9E66A',
-    backgroundColor: 'rgba(249,230,106,0.1)',
+  floatingThought: {
+    position: 'absolute',
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 10,
+    borderRadius: 10,
   },
-  chipLabel: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
+  floatingText: {
+    color: 'white',
+  },
+  successText: {
+    color: '#66BB6A',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
   },
 });

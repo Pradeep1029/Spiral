@@ -94,7 +94,7 @@ exports.updateStep = asyncHandler(async (req, res) => {
  */
 exports.completeSession = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { intensityAfter, nextAction, sleepWindDownCompleted } = req.body;
+  const { finalMood, nextAction } = req.body;
 
   const session = await SpiralSession.findOne({
     _id: id,
@@ -112,18 +112,16 @@ exports.completeSession = asyncHandler(async (req, res) => {
   // Complete the session
   session.status = 'completed';
   session.completedAt = new Date();
-  session.intensityAfter = intensityAfter;
-  
+
   if (!session.step4_close) {
     session.step4_close = {};
   }
-  
+
   session.step4_close = {
     ...session.step4_close,
     completed: true,
-    feelingAfter: intensityAfter,
+    finalMood: finalMood || 5,
     nextAction,
-    sleepWindDownCompleted: sleepWindDownCompleted || false,
     completedAt: new Date(),
   };
 
@@ -132,19 +130,19 @@ exports.completeSession = asyncHandler(async (req, res) => {
   // Update user stats
   req.user.stats.totalSpirals += 1;
   req.user.stats.lastSpiralAt = new Date();
-  
+
   // Update average intensities
   const allSessions = await SpiralSession.find({
     user: req.user._id,
     status: 'completed',
     intensityBefore: { $exists: true },
-    intensityAfter: { $exists: true },
+    'step4_close.finalMood': { $exists: true },
   });
 
   if (allSessions.length > 0) {
     const avgBefore = allSessions.reduce((sum, s) => sum + s.intensityBefore, 0) / allSessions.length;
-    const avgAfter = allSessions.reduce((sum, s) => sum + s.intensityAfter, 0) / allSessions.length;
-    
+    const avgAfter = allSessions.reduce((sum, s) => sum + (s.step4_close?.finalMood || 5), 0) / allSessions.length;
+
     req.user.stats.averageIntensityBefore = avgBefore;
     req.user.stats.averageIntensityAfter = avgAfter;
   }
@@ -155,7 +153,9 @@ exports.completeSession = asyncHandler(async (req, res) => {
 
   sendSuccess(res, {
     session: session.getSummary(),
-    improvement: session.intensityBefore - session.intensityAfter,
+    improvement: session.intensityBefore && session.step4_close?.finalMood
+      ? session.intensityBefore - session.step4_close.finalMood
+      : null,
   }, 'Spiral session completed successfully');
 });
 
@@ -187,11 +187,11 @@ exports.getHistory = asyncHandler(async (req, res) => {
     completedAt: session.completedAt,
     duration: session.duration,
     intensityBefore: session.intensityBefore,
-    intensityAfter: session.intensityAfter,
+    intensityAfter: session.step4_close?.finalMood,
     primaryTopic: session.primaryTopic,
-    pathChosen: session.step3_exit?.pathChosen,
-    improvement: session.intensityBefore && session.intensityAfter 
-      ? session.intensityBefore - session.intensityAfter 
+    pathChosen: session.step3_exit?.techniqueUsed,
+    improvement: session.intensityBefore && session.step4_close?.finalMood
+      ? session.intensityBefore - session.step4_close.finalMood
       : null,
   }));
 
@@ -247,3 +247,46 @@ exports.abandonSession = asyncHandler(async (req, res) => {
     session: session.getSummary(),
   }, 'Session abandoned');
 });
+
+/**
+ * @desc    Transcribe audio file for spiral session
+ * @route   POST /api/v1/spirals/:id/transcribe
+ * @access  Private
+ */
+exports.transcribeAudio = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { transcribeAudio } = require('../services/transcriptionService');
+
+  const session = await SpiralSession.findOne({
+    _id: id,
+    user: req.user._id,
+  });
+
+  if (!session) {
+    return sendError(res, 'Session not found', 404);
+  }
+
+  if (!req.file) {
+    return sendError(res, 'No audio file uploaded', 400);
+  }
+
+  try {
+    // Transcribe the uploaded audio file
+    const result = await transcribeAudio(req.file.path);
+
+    logger.info(`Audio transcribed for session ${session._id}`, {
+      textLength: result.text.length,
+      duration: result.duration,
+    });
+
+    sendSuccess(res, {
+      text: result.text,
+      duration: result.duration,
+      language: result.language,
+    }, 'Audio transcribed successfully');
+  } catch (error) {
+    logger.error('Transcription failed:', error);
+    sendError(res, 'Failed to transcribe audio', 500);
+  }
+});
+
