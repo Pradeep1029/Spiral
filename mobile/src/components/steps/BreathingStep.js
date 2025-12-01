@@ -76,6 +76,7 @@ export default function BreathingStep({ step, onAnswerChange }) {
             return newCount;
           });
 
+          // Always keep the animation going for a calm loop
           if (isActive) {
             runBreathCycle();
           }
@@ -99,21 +100,12 @@ export default function BreathingStep({ step, onAnswerChange }) {
     const interval = setInterval(() => {
       setElapsedSec(prev => {
         if (prev >= totalDurationSec) return prev;
-        const next = prev + 1;
-
-        if (next >= totalDurationSec) {
-          onAnswerChange({
-            completed: true,
-            breaths_completed: breathCount,
-          });
-        }
-
-        return next;
+        return prev + 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [elapsedSec, totalDurationSec, breathCount, onAnswerChange]);
+  }, [elapsedSec, totalDurationSec]);
 
   return (
     <View style={styles.container}>

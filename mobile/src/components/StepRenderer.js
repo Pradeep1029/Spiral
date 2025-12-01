@@ -20,6 +20,7 @@ import DreamTrailsGame from './steps/DreamTrailsGame';
 export default function StepRenderer({ step, onSubmit, loading }) {
     const [showEducation, setShowEducation] = useState(false);
     const [pendingAnswer, setPendingAnswer] = useState(null);
+    const [breathingElapsed, setBreathingElapsed] = useState(0);
 
     const handleAnswerChange = (partial) => {
         setPendingAnswer((prev) => ({
@@ -33,6 +34,34 @@ export default function StepRenderer({ step, onSubmit, loading }) {
         setPendingAnswer(null);
         onSubmit(answerToSend);
     };
+
+    React.useEffect(() => {
+        if (step.step_type !== 'breathing') {
+            if (breathingElapsed !== 0) {
+                setBreathingElapsed(0);
+            }
+            return;
+        }
+
+        const breathProps = step.ui?.props || {};
+        const breathCount = breathProps.breath_count || 4;
+        const inhaleSec = breathProps.inhale_sec || 4;
+        const exhaleSec = breathProps.exhale_sec || 6;
+        const durationSec = breathCount * (inhaleSec + exhaleSec);
+
+        if (breathingElapsed >= durationSec) {
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setBreathingElapsed((prev) => {
+                if (prev >= durationSec) return prev;
+                return prev + 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [step, breathingElapsed]);
 
     const renderStepContent = () => {
         switch (step.step_type) {
@@ -60,14 +89,32 @@ export default function StepRenderer({ step, onSubmit, loading }) {
                 return <TextDumpStep step={step} onSubmit={onSubmit} loading={loading} />;
 
             case 'breathing':
+                const breathProps = step.ui?.props || {};
+                const breathCount = breathProps.breath_count || 4;
+                const inhaleSec = breathProps.inhale_sec || 4;
+                const exhaleSec = breathProps.exhale_sec || 6;
+                const durationSec = breathCount * (inhaleSec + exhaleSec);
+                const remaining = Math.max(durationSec - breathingElapsed, 0);
+
                 return (
                     <View>
                         <Text style={styles.title}>{step.title}</Text>
                         {step.subtitle && <Text style={styles.subtitle}>{step.subtitle}</Text>}
-                        <BreathingPacer
-                            onComplete={() => handleStepSubmit({ completed: true })}
-                            duration={step.ui?.props?.breath_count * (step.ui?.props?.inhale_sec + step.ui?.props?.exhale_sec) || 60}
-                        />
+                        <BreathingPacer isActive />
+                        <Text style={styles.description}>
+                            {remaining > 0
+                                ? `About ${remaining}s until you can move on. Follow the circle and breathe with it.`
+                                : "You can move on whenever you're ready, or keep breathing with the circle."}
+                        </Text>
+                        {remaining <= 0 && (
+                            <TouchableOpacity
+                                style={styles.primaryButton}
+                                onPress={() => handleStepSubmit({ completed: true })}
+                                disabled={loading}
+                            >
+                                <Text style={styles.primaryButtonText}>{step.primary_cta?.label || 'Next'}</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 );
 

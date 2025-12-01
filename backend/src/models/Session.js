@@ -109,7 +109,11 @@ const sessionSchema = new mongoose.Schema({
       'behavioral_micro_plan',
       'sleep_wind_down',
       'acceptance_values',
-      'summary'
+      'summary',
+      'training_intro',
+      'training_concept',
+      'training_practice',
+      'training_summary',
     ],
   }],
   currentMethodIndex: {
@@ -256,6 +260,8 @@ const sessionSchema = new mongoose.Schema({
       'action_plan',
       'behavioral_micro_plan',
       'acceptance_values',
+      'body_regulation',
+      'cognitive_labeling',
     ],
   }],
   

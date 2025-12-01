@@ -19,18 +19,6 @@ export default function NewHomeScreen({ navigation }) {
     });
   };
 
-  const handleHarshOnSelf = async () => {
-    // Navigate to self-compassion–flavored rescue flow
-    navigation.navigate('SessionFlow', {
-      context: 'self_compassion',
-      sleepRelated: true,
-    });
-  };
-
-  const handleCheckIn = () => {
-    navigation.navigate('QuickCheckIn');
-  };
-
   const handleCrisis = () => {
     navigation.navigate('Safety');
   };
@@ -65,19 +53,6 @@ export default function NewHomeScreen({ navigation }) {
             activeOpacity={0.8}
           >
             <Text style={styles.primaryButtonText}>I'm spiraling</Text>
-          </TouchableOpacity>
-
-          {/* Secondary Action */}
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={handleHarshOnSelf}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.secondaryButtonText}>I'm being harsh on myself</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={handleCheckIn} style={styles.tertiaryButton}>
-            <Text style={styles.tertiaryText}>I'm okay, just checking in</Text>
           </TouchableOpacity>
 
           {/* Dream Trails standalone entry */}
