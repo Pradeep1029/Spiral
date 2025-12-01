@@ -16,7 +16,10 @@ export default function QuickCheckInScreen({ navigation }) {
         mentalState: state,
       });
       if (state === 'spiraling') {
-        navigation.replace('SpiralRescue');
+        navigation.replace('SessionFlow', {
+          context: 'spiral',
+          sleepRelated: true,
+        });
       } else {
         navigation.goBack();
       }

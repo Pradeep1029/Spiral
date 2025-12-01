@@ -3,7 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const {
   createSession,
-  sendMessage,
   getSessions,
   getSession,
   submitFeedback,
@@ -24,9 +23,6 @@ router.get('/:id', getSession);
 // Step-based flow routes (NEW)
 router.get('/:id/next_step', getNextStep);
 router.post('/:id/steps/:stepId/answer', submitStepAnswer);
-
-// Message route (legacy chat-based)
-router.post('/:id/messages', sendMessage);
 
 // Feedback route
 router.post('/:id/feedback', submitFeedback);

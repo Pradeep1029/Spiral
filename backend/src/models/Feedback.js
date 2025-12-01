@@ -5,7 +5,6 @@ const feedbackSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Session',
     required: true,
-    index: true,
   },
   
   user: {

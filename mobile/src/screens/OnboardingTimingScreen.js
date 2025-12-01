@@ -6,8 +6,9 @@ import PrimaryButton from '../components/PrimaryButton';
 
 const OPTIONS = [
   { key: 'before_sleep', label: 'Right before sleep' },
-  { key: 'middle_night', label: 'Middle of the night' },
-  { key: 'random', label: 'Random times' },
+  { key: 'middle_night', label: 'In the middle of the night' },
+  { key: 'evenings', label: 'Evenings, randomly' },
+  { key: 'anytime', label: 'During the day / anytime' },
 ];
 
 export default function OnboardingTimingScreen({ route, navigation }) {
@@ -23,10 +24,8 @@ export default function OnboardingTimingScreen({ route, navigation }) {
 
   return (
     <Screen scrollable>
-      <Title>When do your spirals usually hit?</Title>
-      <Body style={{ marginBottom: 24 }}>
-        Well use this later for gentle reminders and defaults.
-      </Body>
+      <Title>When do you spiral most?</Title>
+      <Body style={{ marginBottom: 24 }}>Pick what feels most true right now.</Body>
       <View style={{ gap: 12 }}>
         {OPTIONS.map((opt) => (
           <Pressable

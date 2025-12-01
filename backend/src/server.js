@@ -18,11 +18,14 @@ const authRoutes = require('./routes/authRoutes');
 const onboardingRoutes = require('./routes/onboardingRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const insightsRoutes = require('./routes/insightsRoutes');
-const spiralRoutes = require('./routes/spiralRoutes');
 const checkInRoutes = require('./routes/checkInRoutes');
 const compassionRoutes = require('./routes/compassionRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+// v2 Routes
+const trainingRoutes = require('./routes/trainingRoutes');
+const archetypeRoutes = require('./routes/archetypeRoutes');
+const autopilotRoutes = require('./routes/autopilotRoutes');
 
 // Initialize express app
 const app = express();
@@ -106,8 +109,12 @@ app.use(`${API_VERSION}/onboarding`, apiLimiter, onboardingRoutes);
 app.use(`${API_VERSION}/sessions`, apiLimiter, sessionRoutes);
 app.use(`${API_VERSION}/insights`, apiLimiter, insightsRoutes);
 
+// v2 Routes - Training Mode, Archetypes & Autopilot
+app.use(`${API_VERSION}/training`, apiLimiter, trainingRoutes);
+app.use(`${API_VERSION}/archetypes`, apiLimiter, archetypeRoutes);
+app.use(`${API_VERSION}/autopilot`, apiLimiter, autopilotRoutes);
+
 // Legacy routes (keep for backward compatibility)
-app.use(`${API_VERSION}/spirals`, apiLimiter, spiralRoutes);
 app.use(`${API_VERSION}/checkins`, apiLimiter, checkInRoutes);
 app.use(`${API_VERSION}/compassion`, apiLimiter, compassionRoutes);
 app.use(`${API_VERSION}/progress`, apiLimiter, progressRoutes);

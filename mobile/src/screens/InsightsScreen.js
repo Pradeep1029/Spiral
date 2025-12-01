@@ -6,22 +6,29 @@ import {
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 
 export default function InsightsScreen() {
   const [insights, setInsights] = useState(null);
+  const [archetypes, setArchetypes] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchInsights();
+    fetchData();
   }, []);
 
-  const fetchInsights = async () => {
+  const fetchData = async () => {
     try {
-      const response = await api.get('/insights?days=30');
-      setInsights(response.data.data);
+      const [insightsRes, archetypesRes] = await Promise.all([
+        api.get('/insights?days=30'),
+        api.get('/archetypes').catch(() => ({ data: { data: { archetypes: [] } } })),
+      ]);
+      setInsights(insightsRes.data.data);
+      setArchetypes(archetypesRes.data.data?.archetypes || []);
     } catch (error) {
       console.error('Error fetching insights:', error);
     } finally {
@@ -127,10 +134,64 @@ export default function InsightsScreen() {
             </View>
           )}
 
+          {/* v2: Spiral Archetypes */}
+          {archetypes.length > 0 && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="layers-outline" size={18} color="rgba(255,255,255,0.6)" />
+                <Text style={[styles.cardLabel, { marginLeft: 8, marginBottom: 0 }]}>Your Usual Spirals</Text>
+              </View>
+              {archetypes.map((archetype, index) => (
+                <View key={archetype.id || index} style={styles.archetypeItem}>
+                  <View style={styles.archetypeHeader}>
+                    <Text style={styles.archetypeName}>{archetype.name}</Text>
+                    <View style={styles.archetypeCount}>
+                      <Text style={styles.archetypeCountText}>{archetype.stats?.totalOccurrences || 0}×</Text>
+                    </View>
+                  </View>
+                  <View style={styles.archetypeDetails}>
+                    {archetype.typicalTimeWindows?.length > 0 && (
+                      <View style={styles.archetypeDetail}>
+                        <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.5)" />
+                        <Text style={styles.archetypeDetailText}>
+                          {archetype.typicalTimeWindows.map(t => formatTimeWindow(t)).join(', ')}
+                        </Text>
+                      </View>
+                    )}
+                    {archetype.typicalEmotions?.length > 0 && (
+                      <View style={styles.archetypeDetail}>
+                        <Ionicons name="heart-outline" size={12} color="rgba(255,255,255,0.5)" />
+                        <Text style={styles.archetypeDetailText}>
+                          {archetype.typicalEmotions.slice(0, 2).join(', ')}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {archetype.stats?.averageReduction && (
+                    <Text style={styles.archetypeReduction}>
+                      Avg. {archetype.stats.averageIntensityBefore} → {archetype.stats.averageIntensityAfter}
+                    </Text>
+                  )}
+                  {archetype.effectiveMethods?.length > 0 && (
+                    <View style={styles.effectiveMethodsContainer}>
+                      <Text style={styles.effectiveMethodsLabel}>What helps most:</Text>
+                      <Text style={styles.effectiveMethodsList}>
+                        {archetype.effectiveMethods.slice(0, 3).map(m => formatInterventionName(m.method)).join(' → ')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Top Interventions */}
           {patterns?.topInterventions?.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>Most Used Techniques</Text>
+              <View style={styles.cardHeader}>
+                <Ionicons name="flash-outline" size={18} color="rgba(255,255,255,0.6)" />
+                <Text style={[styles.cardLabel, { marginLeft: 8, marginBottom: 0 }]}>What Helps You Most</Text>
+              </View>
               {patterns.topInterventions.map((item, index) => (
                 <View key={index} style={styles.interventionRow}>
                   <Text style={styles.interventionName}>
@@ -157,10 +218,33 @@ export default function InsightsScreen() {
 }
 
 function formatInterventionName(name) {
-  return name
+  const nameMap = {
+    breathing: 'Breathing',
+    grounding: 'Grounding',
+    brief_cbt: 'CBT Questions',
+    deep_cbt: 'Deep CBT',
+    defusion: 'Thought Defusion',
+    self_compassion: 'Self-Compassion',
+    sleep_wind_down: 'Sleep Wind-Down',
+    acceptance_values: 'Acceptance',
+    behavioral_micro_plan: 'Action Plan',
+    expressive_release: 'Expressive Writing',
+  };
+  return nameMap[name] || name
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+function formatTimeWindow(time) {
+  const timeMap = {
+    morning: 'Morning',
+    afternoon: 'Afternoon',
+    evening: 'Evening',
+    late_night: 'Late night',
+    middle_of_night: '2-4am',
+  };
+  return timeMap[time] || time;
 }
 
 const styles = StyleSheet.create({
@@ -289,5 +373,74 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  archetypeItem: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  archetypeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  archetypeName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  archetypeCount: {
+    backgroundColor: 'rgba(249, 230, 106, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  archetypeCountText: {
+    color: 'rgba(249, 230, 106, 0.9)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  archetypeDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 8,
+  },
+  archetypeDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  archetypeDetailText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginLeft: 4,
+  },
+  archetypeReduction: {
+    fontSize: 13,
+    color: '#4ade80',
+    marginTop: 4,
+  },
+  effectiveMethodsContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  effectiveMethodsLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 4,
+  },
+  effectiveMethodsList: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
   },
 });

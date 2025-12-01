@@ -7,33 +7,44 @@ const logger = require('../config/logger');
 /**
  * Create a new session
  * POST /sessions
+ * 
+ * For rescue mode, this creates a session that will use the 7-phase flow
+ * controlled by rescueFlowGenerator.js
  */
 exports.createSession = async (req, res, next) => {
   try {
-    const { context = 'spiral' } = req.body;
+    const { 
+      context = 'spiral', 
+      mode = 'rescue', // rescue | quick_rescue | buffer | training
+      sleepRelated = false,
+    } = req.body;
+
+    // Determine mode based on context if not explicitly provided
+    let effectiveMode = mode;
+    if (context === 'spiral' || context === 'self_compassion') {
+      effectiveMode = mode || 'rescue';
+    } else if (context === 'autopilot_rescue') {
+      effectiveMode = 'quick_rescue';
+    } else if (context === 'autopilot_buffer') {
+      effectiveMode = 'buffer';
+    }
 
     const session = await Session.create({
       user: req.user.id,
       context,
+      mode: effectiveMode,
+      sleepRelated,
       startedAt: new Date(),
+      currentPhase: 0, // Start at Phase 0: Arrival
+      phaseHistory: [],
     });
 
-    // Generate initial AI greeting based on context
-    const greetingMessages = {
-      spiral: "Hey, I'm here.\n\nYou don't have to phrase it perfectly.\n\nJust tell me what's going on or what your brain is yelling at you right now.",
-      checkin: "How are you doing tonight?",
-      self_compassion: "You're being hard on yourself. I get it.\n\nTell me what's happening.",
-    };
-
-    const aiGreeting = greetingMessages[context] || greetingMessages.spiral;
-
-    // Save AI's first message
-    await Message.create({
-      session: session._id,
-      user: req.user.id,
-      sender: 'ai',
-      role: 'assistant',
-      content: aiGreeting,
+    logger.info('Session created', {
+      sessionId: session._id,
+      userId: req.user.id,
+      mode: effectiveMode,
+      context,
+      sleepRelated,
     });
 
     res.status(201).json({
@@ -42,10 +53,11 @@ exports.createSession = async (req, res, next) => {
       data: {
         session: {
           id: session._id,
+          _id: session._id,
           context: session.context,
+          mode: session.mode,
           startedAt: session.startedAt,
         },
-        initialMessage: aiGreeting,
       },
     });
   } catch (error) {

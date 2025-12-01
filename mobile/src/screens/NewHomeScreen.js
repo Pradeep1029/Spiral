@@ -8,20 +8,35 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function NewHomeScreen({ navigation }) {
   const handleSpiraling = async () => {
-    // Navigate to flow session
-    navigation.navigate('SpiralRescue');
+    // Navigate to spiral rescue flow (sleep-related by default)
+    navigation.navigate('SessionFlow', {
+      context: 'spiral',
+      sleepRelated: true,
+    });
   };
 
   const handleHarshOnSelf = async () => {
-    // Navigate to self-compassion flow
-    navigation.navigate('Flow', { context: 'self_compassion' });
+    // Navigate to self-compassion–flavored rescue flow
+    navigation.navigate('SessionFlow', {
+      context: 'self_compassion',
+      sleepRelated: true,
+    });
+  };
+
+  const handleCheckIn = () => {
+    navigation.navigate('QuickCheckIn');
   };
 
   const handleCrisis = () => {
     navigation.navigate('Safety');
+  };
+
+  const handleTraining = () => {
+    navigation.navigate('TrainingSelection');
   };
 
   return (
@@ -36,7 +51,7 @@ export default function NewHomeScreen({ navigation }) {
           {/* App Title */}
           <View style={styles.header}>
             <Text style={styles.title}>Unspiral</Text>
-            <Text style={styles.subtitle}>Your AI night guide</Text>
+            <Text style={styles.subtitle}>For brains that won't shut up at night.</Text>
           </View>
 
           {/* Main Action Button */}
@@ -49,7 +64,6 @@ export default function NewHomeScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Secondary Action */}
-          {/* Secondary Action - Temporarily removed until Self Compassion flow is rebuilt
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleHarshOnSelf}
@@ -57,7 +71,16 @@ export default function NewHomeScreen({ navigation }) {
           >
             <Text style={styles.secondaryButtonText}>I'm being harsh on myself</Text>
           </TouchableOpacity>
-          */}
+
+          <TouchableOpacity onPress={handleCheckIn} style={styles.tertiaryButton}>
+            <Text style={styles.tertiaryText}>I'm okay, just checking in</Text>
+          </TouchableOpacity>
+
+          {/* Training Mode Link */}
+          <TouchableOpacity onPress={handleTraining} style={styles.trainingLink}>
+            <Ionicons name="shield-checkmark-outline" size={18} color="rgba(249, 230, 106, 0.8)" />
+            <Text style={styles.trainingLinkText}>Build my defenses</Text>
+          </TouchableOpacity>
 
           {/* Footer */}
           <View style={styles.footer}>
@@ -134,6 +157,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     textAlign: 'center',
+  },
+  tertiaryButton: {
+    marginTop: 12,
+  },
+  tertiaryText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
+  trainingLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 32,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 230, 106, 0.3)',
+    backgroundColor: 'rgba(249, 230, 106, 0.08)',
+  },
+  trainingLinkText: {
+    color: 'rgba(249, 230, 106, 0.9)',
+    fontSize: 15,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   footer: {
     position: 'absolute',

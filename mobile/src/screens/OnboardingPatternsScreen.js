@@ -5,10 +5,15 @@ import { Title, Body } from '../components/Typography';
 import PrimaryButton from '../components/PrimaryButton';
 
 const OPTIONS = [
-  { key: 'replay_conversations', label: 'I replay conversations' },
+  { key: 'replay_conversations', label: "I replay conversations in my head" },
   { key: 'obsess_mistakes', label: 'I obsess about mistakes' },
   { key: 'worry_tomorrow', label: 'I worry about tomorrow' },
-  { key: 'failure_thoughts', label: 'I spiral into Im a failure thoughts' },
+  { key: 'failure_thoughts', label: "I spiral into 'I'm a failure' thoughts" },
+  { key: 'anger_at_others', label: 'I get stuck in anger at other people' },
+  { key: 'health_anxiety', label: 'I worry something is wrong with my health' },
+  { key: 'existential_thinking', label: 'I think about meaning, death, or life direction' },
+  { key: 'catastrophize_future', label: 'I catastrophize about the future' },
+  { key: 'cant_switch_off', label: "I can't switch my brain off at night" },
 ];
 
 export default function OnboardingPatternsScreen({ navigation }) {
@@ -26,8 +31,11 @@ export default function OnboardingPatternsScreen({ navigation }) {
 
   return (
     <Screen scrollable>
-      <Title>Hey.
-This is for people whose brains wont shut up at night.</Title>
+      <Title>For brains that won't shut up at night</Title>
+      <Body style={{ marginBottom: 24 }}>
+        This is for people who get stuck in loops of overthinking, regret, or anxiety when
+        they should be resting.
+      </Body>
       <Body style={{ marginBottom: 24 }}>Does this sound like you?</Body>
       <View style={{ gap: 12 }}>
         {OPTIONS.map((opt) => (
@@ -41,7 +49,7 @@ This is for people whose brains wont shut up at night.</Title>
         ))}
       </View>
       <PrimaryButton
-        label="Yeah, thats me"
+        label="Yeah, that's me"
         onPress={handleNext}
         disabled={selected.length === 0}
       />

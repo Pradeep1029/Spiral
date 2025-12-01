@@ -1,98 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import PrimaryButton from '../PrimaryButton';
 
-export default function ReframeReviewStep({ step, onAnswerChange }) {
-  const originalReframe = step.ui?.props?.reframe_text || '';
-  const [text, setText] = useState(originalReframe);
-  const [approved, setApproved] = useState(false);
+export default function ReframeReviewStep({ step, onSubmit, loading }) {
+  const aiReframe = step.ui?.props?.ai_reframe || '';
+  const [editedReframe, setEditedReframe] = useState(aiReframe);
+  const [isEditing, setIsEditing] = useState(false);
 
-  useEffect(() => {
-    // Initialize with the AI-generated reframe
-    setText(originalReframe);
-    setApproved(true); // Assume approved by default
-    onAnswerChange({
-      approved: true,
-      text: originalReframe,
-    });
-  }, [originalReframe]);
-
-  const handleChange = (newText) => {
-    setText(newText);
-    setApproved(newText.trim() !== '');
-    onAnswerChange({
-      approved: newText.trim() !== '',
-      text: newText,
+  const handleSubmit = () => {
+    onSubmit({
+      reframe: editedReframe,
+      accepted: true,
+      edited: editedReframe !== aiReframe,
     });
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{step.title}</Text>
-      {step.subtitle && (
-        <Text style={styles.subtitle}>{step.subtitle}</Text>
-      )}
+      {step.subtitle && <Text style={styles.subtitle}>{step.subtitle}</Text>}
+
+      <View style={styles.reframeCard}>
+        <View style={styles.reframeHeader}>
+          <Ionicons name="bulb" size={24} color="#FFD700" />
+          <Text style={styles.reframeLabel}>Balanced Thought</Text>
+        </View>
+
+        {isEditing ? (
+          <TextInput
+            style={styles.textInput}
+            multiline
+            value={editedReframe}
+            onChangeText={setEditedReframe}
+            textAlignVertical="top"
+          />
+        ) : (
+          <Text style={styles.reframeText}>{editedReframe}</Text>
+        )}
+
+        {step.ui?.props?.editable && (
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => setIsEditing(!isEditing)}
+          >
+            <Ionicons
+              name={isEditing ? 'checkmark-circle' : 'create'}
+              size={20}
+              color="#FFD700"
+            />
+            <Text style={styles.editButtonText}>
+              {isEditing ? 'Done editing' : 'Edit this thought'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {step.description && (
         <Text style={styles.description}>{step.description}</Text>
       )}
 
-      <TextInput
-        style={styles.textarea}
-        value={text}
-        onChangeText={handleChange}
-        placeholder="Your balanced thought..."
-        placeholderTextColor="rgba(255, 255, 255, 0.3)"
-        multiline
-        numberOfLines={6}
-        textAlignVertical="top"
+      <PrimaryButton
+        label={step.primary_cta?.label || 'Accept'}
+        onPress={handleSubmit}
+        disabled={loading || !editedReframe.trim()}
+        style={styles.button}
       />
-
-      <Text style={styles.hint}>
-        Feel free to edit this until it feels right to you.
-      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '400',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 24,
     textAlign: 'center',
-    marginBottom: 8,
+  },
+  reframeCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  reframeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reframeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFD700',
+    marginLeft: 8,
+  },
+  reframeText: {
+    fontSize: 16,
+    color: '#fff',
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  textInput: {
+    fontSize: 16,
+    color: '#fff',
+    lineHeight: 24,
+    minHeight: 80,
+    marginBottom: 12,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  editButtonText: {
+    color: '#FFD700',
+    fontSize: 14,
+    marginLeft: 6,
+    fontWeight: '500',
   },
   description: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.6)',
     marginBottom: 24,
-  },
-  textarea: {
-    backgroundColor: 'rgba(98, 126, 234, 0.15)',
-    borderRadius: 16,
-    padding: 20,
-    color: '#FFFFFF',
-    fontSize: 17,
-    lineHeight: 26,
-    minHeight: 160,
-    borderWidth: 2,
-    borderColor: 'rgba(98, 126, 234, 0.3)',
-  },
-  hint: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.4)',
     textAlign: 'center',
-    marginTop: 12,
-    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  button: {
+    width: '100%',
   },
 });

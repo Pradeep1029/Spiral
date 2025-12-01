@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
+import PrimaryButton from '../PrimaryButton';
 
-export default function CBTQuestionStep({ step, onAnswerChange }) {
+export default function CBTQuestionStep({ step, onSubmit, loading }) {
   const [response, setResponse] = useState('');
 
   const handleChange = (text) => {
     setResponse(text);
-    onAnswerChange({ response: text });
+  };
+
+  const handleSubmit = () => {
+    onSubmit({ response });
   };
 
   return (
@@ -33,6 +37,13 @@ export default function CBTQuestionStep({ step, onAnswerChange }) {
       <Text style={styles.hint}>
         There's no right answer. Just what comes to mind.
       </Text>
+
+      <PrimaryButton
+        label={step.primary_cta?.label || 'Next'}
+        onPress={handleSubmit}
+        disabled={loading}
+        style={styles.button}
+      />
     </View>
   );
 }
@@ -79,5 +90,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
     fontStyle: 'italic',
+  },
+  button: {
+    marginTop: 24,
   },
 });

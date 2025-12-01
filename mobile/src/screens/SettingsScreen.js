@@ -7,16 +7,27 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import * as Notifications from 'expo-notifications';
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const { user, logout } = useAuth();
   const [prefs, setPrefs] = useState({ enableNotifications: true, checkInTime: '22:30' });
+  const [autopilot, setAutopilot] = useState({
+    enabled: false,
+    lateNightPromptsEnabled: true,
+    daytimeFollowupsEnabled: true,
+    eveningCheckinsEnabled: true,
+    maxPromptsPerDay: 2,
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await api.get('/notifications/preferences');
-        setPrefs(res.data.data || prefs);
+        const [notifRes, autopilotRes] = await Promise.all([
+          api.get('/notifications/preferences').catch(() => ({ data: { data: prefs } })),
+          api.get('/autopilot/settings').catch(() => ({ data: { data: { settings: autopilot } } })),
+        ]);
+        setPrefs(notifRes.data.data || prefs);
+        setAutopilot(autopilotRes.data.data?.settings || autopilot);
       } catch (e) {
         // ignore, use defaults
       }
@@ -66,6 +77,27 @@ export default function SettingsScreen() {
     }
   };
 
+  const toggleAutopilot = async (value) => {
+    setAutopilot((p) => ({ ...p, enabled: value }));
+    try {
+      if (value) {
+        await registerPushToken();
+      }
+      await api.post('/autopilot/toggle', { enabled: value });
+    } catch (e) {
+      // ignore for now
+    }
+  };
+
+  const updateAutopilotSetting = async (key, value) => {
+    setAutopilot((p) => ({ ...p, [key]: value }));
+    try {
+      await api.patch('/autopilot/settings', { [key]: value });
+    } catch (e) {
+      // ignore for now
+    }
+  };
+
   return (
     <Screen scrollable>
       <Title>Settings</Title>
@@ -85,6 +117,64 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+
+      {/* v2: Autopilot Settings */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Subtitle>Autopilot check-ins</Subtitle>
+          <Switch
+            value={autopilot.enabled}
+            onValueChange={toggleAutopilot}
+          />
+        </View>
+        <Body style={{ marginBottom: 12 }}>
+          Catch spirals before they start with gentle, context-aware nudges.
+        </Body>
+        {autopilot.enabled && (
+          <View style={styles.autopilotOptions}>
+            <View style={styles.optionRow}>
+              <Text style={styles.optionLabel}>Evening buffer prompts</Text>
+              <Switch
+                value={autopilot.eveningCheckinsEnabled}
+                onValueChange={(val) => updateAutopilotSetting('eveningCheckinsEnabled', val)}
+              />
+            </View>
+            <View style={styles.optionRow}>
+              <Text style={styles.optionLabel}>Late-night rescue prompts</Text>
+              <Switch
+                value={autopilot.lateNightPromptsEnabled}
+                onValueChange={(val) => updateAutopilotSetting('lateNightPromptsEnabled', val)}
+              />
+            </View>
+            <View style={styles.optionRow}>
+              <Text style={styles.optionLabel}>Daytime follow-ups</Text>
+              <Switch
+                value={autopilot.daytimeFollowupsEnabled}
+                onValueChange={(val) => updateAutopilotSetting('daytimeFollowupsEnabled', val)}
+              />
+            </View>
+            <View style={styles.optionRow}>
+              <Text style={styles.optionLabel}>Max prompts per day</Text>
+              <View style={styles.counterRow}>
+                <TouchableOpacity
+                  style={styles.counterButton}
+                  onPress={() => updateAutopilotSetting('maxPromptsPerDay', Math.max(1, autopilot.maxPromptsPerDay - 1))}
+                >
+                  <Text style={styles.counterButtonText}>−</Text>
+                </TouchableOpacity>
+                <Text style={styles.counterValue}>{autopilot.maxPromptsPerDay}</Text>
+                <TouchableOpacity
+                  style={styles.counterButton}
+                  onPress={() => updateAutopilotSetting('maxPromptsPerDay', Math.min(3, autopilot.maxPromptsPerDay + 1))}
+                >
+                  <Text style={styles.counterButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+
       <View style={styles.card}>
         <Subtitle>Recommend to a friend</Subtitle>
         <Body>
@@ -159,6 +249,51 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     fontSize: 15,
     fontWeight: '500',
-    fontSize: 15,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  autopilotOptions: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  optionLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    flex: 1,
+  },
+  counterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  counterButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  counterValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 16,
   },
 });

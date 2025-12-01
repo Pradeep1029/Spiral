@@ -1,17 +1,50 @@
 const logger = require('../config/logger');
+const { getBestMethodsForArchetype } = require('./archetypeService');
 
 /**
  * Generate a micro-plan (sequence of methods) for this session
- * Based on classification + user profile
+ * Based on classification + user profile + archetype history (v2)
  * This is rule-based, not AI, for consistency
  * 
  * @param {object} classification - SessionClassification
  * @param {object} userProfile - User onboarding + preferences
+ * @param {object} options - Additional options
+ * @param {string} options.archetypeId - If matched archetype, use its best methods
+ * @param {string} options.mode - 'rescue' | 'quick_rescue' | 'buffer'
  * @returns {string[]} Array of method labels
  */
-function generateMicroPlan(classification, userProfile) {
+async function generateMicroPlan(classification, userProfile, options = {}) {
   const { thoughtForm, context, intensity, cognitiveCapacity } = classification;
-  const methods = [];
+  const { archetypeId, mode = 'rescue' } = options;
+  let methods = [];
+
+  // v2: If we have a matched archetype with proven methods, consider using them
+  if (archetypeId) {
+    try {
+      const archetypeMethods = await getBestMethodsForArchetype(archetypeId);
+      if (archetypeMethods && archetypeMethods.length >= 3) {
+        logger.info('Using archetype-proven methods', { archetypeId, methods: archetypeMethods });
+        // Use archetype's best methods but ensure we have essentials
+        methods = ensureEssentialMethods(archetypeMethods, context);
+        if (userProfile.onboarding?.effortTolerance === 'keep_it_short_at_night') {
+          methods = trimForShortSession(methods, context);
+        }
+        return methods;
+      }
+    } catch (err) {
+      logger.warn('Failed to get archetype methods, falling back to rules', { error: err.message });
+    }
+  }
+
+  // v2: Quick rescue mode (shorter flow from Autopilot)
+  if (mode === 'quick_rescue') {
+    return generateQuickRescuePlan(classification, userProfile);
+  }
+
+  // v2: Buffer mode (evening pre-spiral prevention)
+  if (mode === 'buffer') {
+    return generateBufferPlan(userProfile);
+  }
 
   // Always start with intro (handled separately, not in methods)
   // Always get intensity_scale first (handled separately)
@@ -180,7 +213,7 @@ function getCurrentMethod(session) {
   }
 
   const currentMethod = session.microPlan[currentIndex];
-  
+
   // Get method stage (how many steps of this method have been completed)
   const methodStage = getMethodStage(session, currentMethod);
 
@@ -189,13 +222,12 @@ function getCurrentMethod(session) {
 
 /**
  * Calculate stage within current method
- * E.g., for brief_cbt, might be question 1, 2, or 3, then reframe
+ * E.g., for brief_cbt: stage 0 = question, stage 1 = reframe
+ * This uses session.methodStepCount which tracks steps within current method
  */
 function getMethodStage(session, currentMethod) {
-  // Count how many steps of this method type have been completed
-  // This is a simplified version - you'd query SessionStep in real implementation
-  // For now, return 0 (first step of this method)
-  return 0;
+  // methodStepCount tracks how many steps we've done in the current method
+  return session.methodStepCount || 0;
 }
 
 /**
@@ -204,8 +236,9 @@ function getMethodStage(session, currentMethod) {
  */
 async function advanceToNextMethod(session) {
   session.currentMethodIndex = (session.currentMethodIndex || 0) + 1;
+  session.methodStepCount = 0; // Reset step count for new method
   await session.save();
-  
+
   logger.info('Advanced to next method', {
     sessionId: session._id,
     newIndex: session.currentMethodIndex,
@@ -213,8 +246,109 @@ async function advanceToNextMethod(session) {
   });
 }
 
+/**
+ * Increment step count within current method (for multi-step methods like brief_cbt)
+ */
+async function incrementMethodStep(session) {
+  session.methodStepCount = (session.methodStepCount || 0) + 1;
+  await session.save();
+
+  logger.info('Incremented method step', {
+    sessionId: session._id,
+    currentMethod: session.microPlan[session.currentMethodIndex],
+    newStepCount: session.methodStepCount,
+  });
+}
+
+/**
+ * Ensure essential methods are present in the sequence
+ */
+function ensureEssentialMethods(methods, context) {
+  const essentials = [];
+  
+  // Always start with some grounding
+  if (!methods.includes('breathing') && !methods.includes('grounding')) {
+    essentials.push('breathing');
+  }
+  
+  // Add the archetype methods
+  essentials.push(...methods);
+  
+  // Always include sleep wind-down for late night
+  if (context.sleepRelated && context.timeOfDay === 'late_night' && !methods.includes('sleep_wind_down')) {
+    // Insert before summary
+    const summaryIndex = essentials.indexOf('summary');
+    if (summaryIndex >= 0) {
+      essentials.splice(summaryIndex, 0, 'sleep_wind_down');
+    } else {
+      essentials.push('sleep_wind_down');
+    }
+  }
+  
+  // Always end with summary
+  if (!essentials.includes('summary')) {
+    essentials.push('summary');
+  }
+  
+  return essentials;
+}
+
+/**
+ * Generate quick rescue plan for Autopilot night unlock
+ * Shorter: 3-4 steps max
+ */
+function generateQuickRescuePlan(classification, userProfile) {
+  const methods = [];
+  
+  // Always start with grounding (skip breathing at night - too long)
+  methods.push('grounding');
+  
+  // One core method based on thought form
+  switch (classification.thoughtForm) {
+    case 'self_criticism':
+      methods.push('self_compassion');
+      break;
+    case 'worry':
+      methods.push('defusion');
+      break;
+    case 'rumination':
+      methods.push('defusion');
+      break;
+    default:
+      methods.push('brief_cbt');
+  }
+  
+  // Sleep wind-down (it's night)
+  methods.push('sleep_wind_down');
+  
+  return methods;
+}
+
+/**
+ * Generate buffer plan for evening pre-spiral prevention
+ * 2 minute flow: grounding + tiny tip
+ */
+function generateBufferPlan(userProfile) {
+  const methods = [];
+  
+  // Quick grounding
+  if (userProfile.profile?.hatesBreathingExercises) {
+    methods.push('grounding');
+  } else {
+    methods.push('breathing');
+  }
+  
+  // Self-compassion reminder (light)
+  methods.push('self_compassion');
+  
+  return methods;
+}
+
 module.exports = {
   generateMicroPlan,
   getCurrentMethod,
   advanceToNextMethod,
+  incrementMethodStep,
+  generateQuickRescuePlan,
+  generateBufferPlan,
 };

@@ -33,7 +33,7 @@ async function sendScheduledCheckIns() {
 
     // Find users whose check-in time matches current time (within the hour)
     const users = await User.find({
-      'preferences.enableNotifications': true,
+      'profile.nightlyCheckinEnabled': true,
       pushTokens: { $exists: true, $not: { $size: 0 } },
     });
 
@@ -42,7 +42,7 @@ async function sendScheduledCheckIns() {
     let notificationsSent = 0;
 
     for (const user of users) {
-      const userCheckInTime = user.preferences.checkInTime || '22:30';
+      const userCheckInTime = (user.profile && user.profile.nightlyCheckinTime) || '22:30';
       const [checkInHour, checkInMinute] = userCheckInTime.split(':').map(Number);
 
       // Check if current time matches user's check-in time (within same hour)
@@ -65,8 +65,8 @@ function scheduleOneTimeNotification(userId, delay, title, body) {
   setTimeout(async () => {
     try {
       const user = await User.findById(userId);
-      
-      if (!user || !user.preferences.enableNotifications) {
+
+      if (!user || !user.profile || !user.profile.nightlyCheckinEnabled) {
         return;
       }
 

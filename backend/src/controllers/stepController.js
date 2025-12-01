@@ -1,7 +1,7 @@
 const Session = require('../models/Session');
 const SessionStep = require('../models/SessionStep');
-// const { generateNextStep } = require('../services/stepGenerator_v2'); // DELETED - using SpiralRescueScreen instead
-const { getCurrentMethod, advanceToNextMethod } = require('../services/microPlanGenerator');
+const { generateNextStep } = require('../services/stepGenerator_v2');
+const { generateNextRescueStep } = require('../services/rescueFlowGenerator');
 const logger = require('../config/logger');
 
 /**
@@ -106,19 +106,46 @@ exports.getNextStep = async (req, res, next) => {
       });
     }
 
-    // Get user profile
+    // Get user profile + onboarding for personalization
     const user = await req.user.populate('profile');
-    const userProfile = user.profile || {};
+    const userContext = {
+      onboarding: user.onboarding,
+      profile: user.profile || {},
+    };
 
-    // Generate next step - DISABLED: Using SpiralRescueScreen instead
-    // const stepData = await generateNextStep(session._id, req.user.id, userProfile);
-
-    return res.status(501).json({
-      success: false,
-      message: 'Step-based flow is deprecated. Please use the SpiralRescue screen instead.',
+    logger.info('getNextStep: generating step', {
+      sessionId: session._id,
+      userId: req.user.id,
+      mode: session.mode,
     });
 
-    // Save step to database
+    // Generate next step - use phase-based generator for rescue mode
+    let stepData;
+    if (session.mode === 'rescue' || session.mode === 'quick_rescue' || session.context === 'spiral') {
+      stepData = await generateNextRescueStep(session._id, req.user.id, userContext);
+      
+      // Check if flow is complete
+      if (stepData.flow_complete) {
+        return res.status(200).json({
+          success: true,
+          flow_complete: true,
+          message: 'Flow has ended',
+          summary: stepData.summary,
+        });
+      }
+    } else {
+      // Use legacy generator for training mode etc.
+      stepData = await generateNextStep(session._id, req.user.id, userContext);
+    }
+
+    logger.info('getNextStep: generated step data', {
+      sessionId: session._id,
+      stepId: stepData.step_id,
+      stepType: stepData.step_type,
+      interventionType: stepData.meta?.intervention_type,
+    });
+
+    // Save step to database with phase tracking
     const stepCount = await SessionStep.countDocuments({ session: session._id });
     await SessionStep.create({
       session: session._id,
@@ -128,10 +155,17 @@ exports.getNextStep = async (req, res, next) => {
       stepData,
       stepIndex: stepCount,
       interventionType: stepData.meta?.intervention_type,
+      phaseNumber: stepData.meta?.phase_number,
+      phaseName: stepData.meta?.phase_name,
     });
 
     // Update session interventions
     if (stepData.meta?.intervention_type) {
+      logger.info('getNextStep: updating session interventions', {
+        sessionId: session._id,
+        interventionType: stepData.meta.intervention_type,
+      });
+
       await Session.findByIdAndUpdate(session._id, {
         $addToSet: { interventionsUsed: stepData.meta.intervention_type },
       });
@@ -244,137 +278,170 @@ exports.submitStepAnswer = async (req, res, next) => {
 };
 
 /**
- * Handle special logic for certain step types
+ * Handle special logic for certain step types (Phase-aware version)
+ * This is called after a step answer is submitted
  */
 async function handleSpecialStepLogic(step, session, answer) {
+  logger.info('handleSpecialStepLogic called', {
+    sessionId: session._id,
+    stepType: step.stepType,
+    phaseNumber: step.phaseNumber,
+  });
+
   switch (step.stepType) {
+    case 'intro':
+      // Intro step - no special handling needed
+      break;
+
+    case 'context_check':
+      // Update sleep context based on choice
+      if (answer.choice_id === 'trying_to_sleep') {
+        session.sleepRelated = true;
+      }
+      await session.save();
+      break;
+
+    case 'body_choice':
+      // Store body technique preference
+      logger.info(`User chose body technique: ${answer.choice_id}`, {
+        sessionId: session._id,
+      });
+      break;
+
     case 'intensity_scale':
       // Update session intensity
       if (!session.initialIntensity) {
         session.initialIntensity = answer.value;
-      } else {
-        session.finalIntensity = answer.value;
       }
+      await session.save();
+      break;
+
+    case 'final_intensity':
+      // Update final intensity
+      session.finalIntensity = answer.value;
       await session.save();
       break;
 
     case 'dump_text':
     case 'dump_voice':
-      // Venting step - classification will happen on next step request
-      logger.info(`User vented: ${step.stepType}`, {
-        sessionId: session._id,
-      });
+      // Store raw dump text for classification
+      if (answer.text) {
+        session.rawDumpText = answer.text;
+      }
+      await session.save();
+      break;
+
+    case 'spiral_title':
+      // Store the spiral title for use in later steps
+      if (answer.title || answer.text) {
+        session.spiralTitle = answer.title || answer.text;
+      }
+      await session.save();
+      break;
+
+    case 'breathing':
+    case 'grounding_5_4_3_2_1':
+      // Body regulation complete - update phase if needed
+      await updatePhaseProgress(session, step);
       break;
 
     case 'choice_buttons':
-      // Log the choice
+    case 'sleep_or_action_choice':
+      // Store path choice for Phase 5
+      if (answer.choice_id === 'sleep' || answer.choice_id === 'action') {
+        session.pathChoice = answer.choice_id;
+        await session.save();
+      }
       logger.info(`User chose: ${answer.choice_id}`, {
         sessionId: session._id,
       });
       break;
 
+    case 'cbt_question':
+    case 'defusion':
+    case 'acceptance':
     case 'reframe_review':
+      // Cognitive work steps - phase will auto-advance
+      await updatePhaseProgress(session, step);
+      break;
+
     case 'self_compassion_script':
+      // Store any custom compassion line they added
+      if (answer.customLine) {
+        session.metadata = session.metadata || {};
+        session.metadata.customCompassionLine = answer.customLine;
+        await session.save();
+      }
+      await updatePhaseProgress(session, step);
+      break;
+
     case 'action_plan':
+      // Store the action plan
+      if (answer.plan || answer.text) {
+        session.actionPlan = answer.plan || answer.text;
+        await session.save();
+      }
+      await updatePhaseProgress(session, step);
+      break;
+
     case 'sleep_wind_down':
-      // These steps typically complete a method - advance to next method
-      await checkAndAdvanceMethod(session, step.stepType);
+      await updatePhaseProgress(session, step);
       break;
 
     case 'summary':
       // Mark session as ended
       session.endedAt = new Date();
-      session.outcome = 'calmer'; // Default, could be determined by final intensity
+      // Determine outcome based on intensity change
+      if (session.initialIntensity && session.finalIntensity) {
+        const improvement = session.initialIntensity - session.finalIntensity;
+        if (improvement >= 2) {
+          session.outcome = 'calmer';
+        } else if (improvement >= 0) {
+          session.outcome = 'same';
+        } else {
+          session.outcome = 'worse';
+        }
+      } else {
+        session.outcome = 'calmer'; // Default
+      }
       await session.save();
       break;
+
+    default:
+      // For any other step type, just update phase progress
+      await updatePhaseProgress(session, step);
+      break;
   }
 }
 
 /**
- * Check if current method is complete and advance to next
+ * Update phase progress tracking
  */
-async function checkAndAdvanceMethod(session, completedStepType) {
-  if (!session.microPlan || session.microPlan.length === 0) {
-    return; // No micro plan yet
+async function updatePhaseProgress(session, step) {
+  if (step.phaseNumber === undefined) return;
+  
+  // Initialize phase history if needed
+  if (!session.phaseHistory) {
+    session.phaseHistory = [];
   }
-
-  const { currentMethod } = getCurrentMethod(session);
-  let shouldAdvance = false;
-
-  // Determine if this step completes the current method
-  switch (currentMethod) {
-    case 'brief_cbt':
-      // brief_cbt is complete after reframe_review
-      if (completedStepType === 'reframe_review') {
-        shouldAdvance = true;
-      }
-      break;
-
-    case 'self_compassion':
-      if (completedStepType === 'self_compassion_script') {
-        shouldAdvance = true;
-      }
-      break;
-
-    case 'defusion':
-      // Defusion is typically one cbt_question
-      if (completedStepType === 'cbt_question') {
-        shouldAdvance = true;
-      }
-      break;
-
-    case 'behavioral_micro_plan':
-      if (completedStepType === 'action_plan') {
-        shouldAdvance = true;
-      }
-      break;
-
-    case 'sleep_wind_down':
-      if (completedStepType === 'sleep_wind_down') {
-        shouldAdvance = true;
-      }
-      break;
-
-    case 'breathing':
-    case 'grounding':
-    case 'expressive_release':
-    case 'acceptance_values':
-      // These are typically one step
-      shouldAdvance = true;
-      break;
+  
+  // Find or create phase entry
+  let phaseEntry = session.phaseHistory.find(p => p.phaseNumber === step.phaseNumber);
+  if (!phaseEntry) {
+    phaseEntry = {
+      phaseNumber: step.phaseNumber,
+      phaseName: step.phaseName,
+      startedAt: new Date(),
+      completed: false,
+      stepsCompleted: [],
+    };
+    session.phaseHistory.push(phaseEntry);
   }
-
-  if (shouldAdvance) {
-    await advanceToNextMethod(session);
-    logger.info('Advanced to next method', {
-      sessionId: session._id,
-      completedMethod: currentMethod,
-    });
+  
+  // Add step to completed steps
+  if (!phaseEntry.stepsCompleted.includes(step.stepId)) {
+    phaseEntry.stepsCompleted.push(step.stepId);
   }
+  
+  await session.save();
 }
-
-/**
- * Save a step (called internally when generating step)
- */
-async function saveStep(sessionId, userId, stepData, stepIndex) {
-  const step = await SessionStep.create({
-    session: sessionId,
-    user: userId,
-    stepId: stepData.step_id,
-    stepType: stepData.step_type,
-    stepData,
-    stepIndex,
-    interventionType: stepData.meta?.intervention_type,
-  });
-
-  // Update session interventions
-  if (stepData.meta?.intervention_type) {
-    await Session.findByIdAndUpdate(sessionId, {
-      $addToSet: { interventionsUsed: stepData.meta.intervention_type },
-    });
-  }
-
-  return step;
-}
-
-// Note: Functions are already exported using exports.functionName pattern above

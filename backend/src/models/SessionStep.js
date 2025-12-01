@@ -23,23 +23,51 @@ const sessionStepSchema = new mongoose.Schema({
   stepType: {
     type: String,
     enum: [
+      // Phase 0: Arrival
       'intro',
-      'intensity_scale',
+      'context_check',
+      // Phase 1: Body Downshift
+      'body_choice',
       'breathing',
       'grounding_5_4_3_2_1',
+      // Phase 2: Dump & Name
+      'intensity_scale',
       'dump_text',
       'dump_voice',
-      'choice_buttons',
+      'spiral_title',
+      // Phase 3: Understand & Unhook
       'cbt_question',
+      'defusion',
+      'acceptance',
       'reframe_review',
+      // Phase 4: Self-Compassion
       'self_compassion_script',
-      'sleep_choice',
-      'sleep_wind_down',
+      'common_humanity',
+      // Phase 5: Choose Path
+      'sleep_or_action_choice',
       'action_plan',
+      // Phase 6: Closing
+      'sleep_wind_down',
+      'future_orientation',
+      'final_intensity',
       'summary',
+      // Utility
+      'choice_buttons',
+      'sleep_choice',
       'crisis_info',
     ],
     required: true,
+  },
+  
+  // Phase tracking
+  phaseNumber: {
+    type: Number,
+    min: 0,
+    max: 6,
+  },
+  phaseName: {
+    type: String,
+    enum: ['arrival', 'body_downshift', 'dump_and_name', 'understand_unhook', 'self_compassion', 'choose_path', 'closing'],
   },
   
   // Full step JSON as returned by AI

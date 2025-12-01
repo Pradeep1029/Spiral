@@ -44,12 +44,14 @@ const userSchema = new mongoose.Schema({
         'failure_thoughts',
         'anger_at_others',
         'health_anxiety',
-        'existential_thinking'
+        'existential_thinking',
+        'catastrophize_future',
+        'cant_switch_off',
       ],
     }],
     spiralTiming: {
       type: String,
-      enum: ['late_night', 'before_sleep', 'random', 'morning', 'other'],
+      enum: ['late_night', 'before_sleep', 'random', 'morning', 'other', 'middle_night', 'evenings', 'anytime'],
     },
     spiralTopics: [{
       type: String,
@@ -68,6 +70,24 @@ const userSchema = new mongoose.Schema({
       enum: ['dont_mind_questions', 'keep_it_short_at_night'],
     },
     completedAt: Date,
+    // v2 enhanced onboarding fields
+    emotionalFlavors: [{
+      type: String,
+      enum: ['anxiety', 'shame', 'sadness', 'anger', 'guilt', 'fear', 'hopelessness', 'mixed'],
+    }],
+    helpStylePreference: {
+      type: String,
+      enum: ['think_clearly', 'be_kinder', 'calm_body', 'not_sure'],
+    },
+    effortTolerance: {
+      type: String,
+      enum: ['dont_mind_questions', 'keep_it_short_at_night', 'depends_on_mood'],
+    },
+    // Autopilot consent captured during onboarding
+    autopilotConsent: {
+      type: Boolean,
+      default: false,
+    },
   },
   
   // User profile & preferences (AI-driven personalization)
@@ -108,7 +128,7 @@ const userSchema = new mongoose.Schema({
       default: false,
     },
     
-    // Notification preferences
+    // Notification preferences (legacy)
     nightlyCheckinEnabled: {
       type: Boolean,
       default: true,
@@ -120,6 +140,65 @@ const userSchema = new mongoose.Schema({
     timezone: {
       type: String,
       default: 'UTC',
+    },
+  },
+
+  // Autopilot settings (v2)
+  autopilot: {
+    enabled: {
+      type: Boolean,
+      default: false,
+    },
+    lateNightPromptsEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    daytimeFollowupsEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    eveningCheckinsEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    maxPromptsPerDay: {
+      type: Number,
+      default: 2,
+      min: 1,
+      max: 3,
+    },
+    // User's typical sleep window
+    sleepWindowStart: {
+      type: String,
+      default: '22:00', // HH:MM format
+    },
+    sleepWindowEnd: {
+      type: String,
+      default: '07:00',
+    },
+    // Tracking for notification throttling
+    promptsSentToday: {
+      type: Number,
+      default: 0,
+    },
+    lastPromptResetDate: {
+      type: Date,
+    },
+    lastPromptSentAt: {
+      type: Date,
+    },
+    // Specific notification type toggles
+    preSpiraleveningEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    nightUnlockEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    nextDayFollowupEnabled: {
+      type: Boolean,
+      default: true,
     },
   },
   

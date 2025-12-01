@@ -10,11 +10,15 @@ import OnboardingTopicsScreen from '../screens/OnboardingTopicsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import NewHomeScreen from '../screens/NewHomeScreen';
-import SpiralRescueScreen from '../screens/SpiralRescueScreen';
+import SessionFlowScreen from '../screens/SessionFlowScreen';
 
 import InsightsScreen from '../screens/InsightsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SafetyScreen from '../screens/SafetyScreen';
+import QuickCheckInScreen from '../screens/QuickCheckInScreen';
+// v2 Training Mode screens
+import TrainingSelectionScreen from '../screens/TrainingSelectionScreen';
+import TrainingFlowScreen from '../screens/TrainingFlowScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -82,10 +86,30 @@ export default function RootNavigator() {
           <Stack.Screen name="MainTabs" component={MainTabs} />
         </>
       )}
-      <Stack.Screen name="SpiralRescue" component={SpiralRescueScreen} />
+      <Stack.Screen
+        name="SessionFlow"
+        component={SessionFlowScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="QuickCheckIn"
+        component={QuickCheckInScreen}
+        options={{ presentation: 'modal' }}
+      />
       <Stack.Screen
         name="Safety"
         component={SafetyScreen}
+        options={{ presentation: 'modal' }}
+      />
+      {/* v2 Training Mode screens */}
+      <Stack.Screen
+        name="TrainingSelection"
+        component={TrainingSelectionScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="TrainingFlow"
+        component={TrainingFlowScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

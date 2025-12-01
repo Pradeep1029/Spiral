@@ -38,6 +38,9 @@ exports.createAnonymousUser = asyncHandler(async (req, res) => {
  * @access  Public
  */
 exports.register = asyncHandler(async (req, res) => {
+  logger.info('Register request received', {
+    body: req.body,
+  });
   const { email, password } = req.body;
 
   // Check if user already exists
@@ -104,6 +107,9 @@ exports.convertAnonymousToRegistered = asyncHandler(async (req, res) => {
  * @access  Public
  */
 exports.login = asyncHandler(async (req, res) => {
+  logger.info('Login request received', {
+    body: req.body,
+  });
   const { email, password, anonymousId } = req.body;
 
   let user;
