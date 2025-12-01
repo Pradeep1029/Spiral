@@ -73,9 +73,9 @@ const PHASES = {
     name: 'closing',
     displayName: 'Closing Ritual & Integration',
     minSteps: 2,
-    maxSteps: 2,
+    maxSteps: 3,
     requiredTypes: ['closing_ritual', 'summary'],
-    optionalTypes: ['sleep_wind_down', 'final_intensity'],
+    optionalTypes: ['sleep_wind_down', 'dream_trails_game', 'final_intensity'],
     goal: 'Grounded closure and acknowledgment',
   },
 };
@@ -309,8 +309,14 @@ function getNextStepTypeForPhase(phaseNumber, stepsInPhase, session, userProfile
       const pathChoice = session.pathChoice || 'sleep';
       
       if (pathChoice === 'sleep') {
-        // Sleep path: wind-down first
-        if (!completedTypes.includes('sleep_wind_down') && !isQuickRescue) {
+        // Sleep path: offer Dream Trails for sleep-related spirals, otherwise sleep_wind_down
+        const isSleepRelated = classification.context?.sleepRelated || session.sleepRelated;
+        
+        if (isSleepRelated && !completedTypes.includes('dream_trails_game') && !isQuickRescue) {
+          // Dream Trails for sleep-related spirals (cognitive shuffle)
+          return 'dream_trails_game';
+        } else if (!completedTypes.includes('sleep_wind_down') && !completedTypes.includes('dream_trails_game') && !isQuickRescue) {
+          // Fallback to regular wind-down
           return 'sleep_wind_down';
         }
       } else {

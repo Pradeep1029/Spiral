@@ -19,6 +19,7 @@ import QuickCheckInScreen from '../screens/QuickCheckInScreen';
 // v2 Training Mode screens
 import TrainingSelectionScreen from '../screens/TrainingSelectionScreen';
 import TrainingFlowScreen from '../screens/TrainingFlowScreen';
+import DreamTrailsScreen from '../screens/DreamTrailsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -110,6 +111,12 @@ export default function RootNavigator() {
       <Stack.Screen
         name="TrainingFlow"
         component={TrainingFlowScreen}
+        options={{ presentation: 'modal' }}
+      />
+      {/* Dream Trails standalone game */}
+      <Stack.Screen
+        name="DreamTrails"
+        component={DreamTrailsScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

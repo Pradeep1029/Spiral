@@ -15,6 +15,7 @@ import GroundingStep from './steps/GroundingStep';
 import ChoiceButtonsStep from './steps/ChoiceButtonsStep';
 import ActionPlanStep from './steps/ActionPlanStep';
 import SleepWindDownStep from './steps/SleepWindDownStep';
+import DreamTrailsGame from './steps/DreamTrailsGame';
 
 export default function StepRenderer({ step, onSubmit, loading }) {
     const [showEducation, setShowEducation] = useState(false);
@@ -205,6 +206,16 @@ export default function StepRenderer({ step, onSubmit, loading }) {
 
             case 'summary':
                 return <SummaryStep step={step} onSubmit={onSubmit} loading={loading} />;
+
+            case 'dream_trails_game':
+                return (
+                    <DreamTrailsGame
+                        step={step}
+                        onSubmit={onSubmit}
+                        loading={loading}
+                        suggestedTrail={step.ui?.props?.suggested_trail}
+                    />
+                );
 
             default:
                 return (

@@ -39,6 +39,10 @@ export default function NewHomeScreen({ navigation }) {
     navigation.navigate('TrainingSelection');
   };
 
+  const handleDreamTrails = () => {
+    navigation.navigate('DreamTrails');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -74,6 +78,12 @@ export default function NewHomeScreen({ navigation }) {
 
           <TouchableOpacity onPress={handleCheckIn} style={styles.tertiaryButton}>
             <Text style={styles.tertiaryText}>I'm okay, just checking in</Text>
+          </TouchableOpacity>
+
+          {/* Dream Trails standalone entry */}
+          <TouchableOpacity onPress={handleDreamTrails} style={styles.dreamTrailsButton}>
+            <Ionicons name="moon-outline" size={18} color="rgba(139, 126, 200, 0.9)" />
+            <Text style={styles.dreamTrailsText}>Can't sleep? Play Dream Trails</Text>
           </TouchableOpacity>
 
           {/* Training Mode Link */}
@@ -180,6 +190,23 @@ const styles = StyleSheet.create({
   },
   trainingLinkText: {
     color: 'rgba(249, 230, 106, 0.9)',
+    fontSize: 15,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  dreamTrailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 126, 200, 0.3)',
+    backgroundColor: 'rgba(139, 126, 200, 0.08)',
+  },
+  dreamTrailsText: {
+    color: 'rgba(139, 126, 200, 0.9)',
     fontSize: 15,
     fontWeight: '500',
     marginLeft: 8,

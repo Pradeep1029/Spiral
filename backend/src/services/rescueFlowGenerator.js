@@ -205,6 +205,8 @@ async function createStepForType(stepType, phaseNumber, session, previousSteps, 
       return createActionPlanStep(session, previousSteps, stepIndex, baseStep, userProfile);
       
     // Phase 6: Closing
+    case 'dream_trails_game':
+      return createDreamTrailsStep(session, stepIndex, baseStep);
     case 'sleep_wind_down':
       return createSleepWindDownStep(session, stepIndex, baseStep);
     case 'future_orientation':
@@ -753,6 +755,38 @@ async function createActionPlanStep(session, previousSteps, stepIndex, baseStep,
 // PHASE 6: CLOSING
 // =============================================================================
 
+function createDreamTrailsStep(session, stepIndex, baseStep) {
+  return {
+    step_id: `dream-trails-${Date.now()}`,
+    step_type: 'dream_trails_game',
+    title: "Want to wander through a 3-minute Dream Trail?",
+    subtitle: "It helps your brain drift instead of spiral.",
+    description: null,
+    ui: {
+      component: 'dream_trails',
+      props: {
+        scenes: 6,
+        tiles_per_scene: 4,
+        suggested_trail: null, // Let user choose
+        default_duration: 180, // 3 minutes
+      },
+    },
+    skippable: true,
+    primary_cta: { label: "I'm ready to put my phone down", action: 'next_step' },
+    secondary_cta: { label: 'Skip', action: 'skip_step' },
+    educational_content: {
+      why_this_matters: "When your brain is stuck on one painful story, imagining random, harmless scenes can pull you off the spiral and make it easier to drift off. This is called 'serial diverse imagining' or cognitive shuffle.",
+      technique_name: 'Cognitive Shuffle / Dream Trails',
+    },
+    ...baseStep,
+    meta: {
+      ...baseStep.meta,
+      intervention_type: 'dream_trails',
+      estimated_duration_sec: 180,
+    },
+  };
+}
+
 function createSleepWindDownStep(session, stepIndex, baseStep) {
   return {
     step_id: `wind-down-${Date.now()}`,
@@ -867,6 +901,10 @@ function createSummaryStep(session, previousSteps, stepIndex, baseStep) {
   
   if (previousSteps.some(s => s.stepType === 'action_plan')) {
     accomplishments.push('You made a small plan for tomorrow');
+  }
+  
+  if (previousSteps.some(s => s.stepType === 'dream_trails_game')) {
+    accomplishments.push('You wandered through Dream Trails to help your mind drift');
   }
   
   return {
