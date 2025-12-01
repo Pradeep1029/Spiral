@@ -8,14 +8,19 @@ import {
   Animated,
   Modal,
   Dimensions,
+  Easing,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-// Trail item lists - neutral, cozy, pictureable words
+// =============================================================================
+// ITEM LISTS BY TRAIL AND VIBE
+// =============================================================================
+
 const TRAIL_ITEMS = {
   soft_objects: [
     'pillow', 'blanket', 'cushion', 'mug', 'teapot', 'cup', 'sock', 'sweater',
@@ -37,30 +42,79 @@ const TRAIL_ITEMS = {
   ],
 };
 
+// Vibe-specific item pools for micro-agency
+const VIBE_ITEMS = {
+  calm: [
+    'cloud', 'moon', 'star', 'lake', 'meadow', 'river', 'hill', 'sunset',
+    'dewdrop', 'mist', 'horizon', 'still water', 'soft breeze', 'quiet path',
+  ],
+  cozy: [
+    'pillow', 'blanket', 'mug', 'cushion', 'sweater', 'candle', 'lamp',
+    'hot cocoa', 'quilt', 'slippers', 'teddy bear', 'warm socks', 'soft chair',
+  ],
+  silly: [
+    'rubber duck', 'tiny boat', 'paper crown', 'mini ladder', 'sock puppet',
+    'balloon animal', 'toy train', 'spinning top', 'bubble', 'pinwheel',
+    'paper airplane', 'bouncy ball', 'wind-up toy', 'snow globe',
+  ],
+};
+
+// Items with special micro-effects
+const EFFECT_ITEMS = {
+  leaf: 'float',
+  cloud: 'blur',
+  balloon: 'drift',
+  feather: 'float',
+  snowflake: 'float',
+  bubble: 'drift',
+  star: 'twinkle',
+  firefly: 'twinkle',
+};
+
 const TRAIL_CONFIG = {
   soft_objects: {
     label: 'Soft Objects',
     description: 'Mugs, blankets, cushions, socks…',
     icon: 'bed-outline',
     color: '#8B7EC8',
+    defaultVibe: 'cozy',
   },
   tiny_adventures: {
     label: 'Tiny Adventures',
     description: 'Little journeys. Nothing intense.',
     icon: 'compass-outline',
     color: '#7CA8C8',
+    defaultVibe: 'calm',
   },
   nature_bits: {
     label: 'Nature Bits',
     description: 'Gentle bits of nature.',
     icon: 'leaf-outline',
     color: '#7CC88B',
+    defaultVibe: 'calm',
+  },
+};
+
+// Background animation themes
+const BG_THEMES = {
+  night_sky: {
+    colors: ['#0a0a1a', '#0f1029', '#151535'],
+    name: 'Night sky',
+  },
+  underwater: {
+    colors: ['#0a1520', '#0f1f2e', '#142838'],
+    name: 'Underwater',
+  },
+  soft_clouds: {
+    colors: ['#1a1a2e', '#1f1f3a', '#252545'],
+    name: 'Soft clouds',
   },
 };
 
 const DEFAULT_SCENES = 6;
 const DEFAULT_TILES_PER_SCENE = 4;
-const SCENE_TITLE_PROMPT_INTERVAL = 2; // Show title prompt every N scenes
+const SCENE_TITLE_PROMPT_SCENES = [2, 4, 6]; // Show title prompt on these scenes
+const VIBE_SELECTOR_SCENES = [2, 4]; // Show vibe selector on these scenes
 
 // Game States
 const GAME_STATES = {
@@ -70,6 +124,112 @@ const GAME_STATES = {
   END: 'end',
 };
 
+// Vibes for micro-agency
+const VIBES = [
+  { id: 'calm', label: 'Calm', icon: 'water-outline' },
+  { id: 'cozy', label: 'Cozy', icon: 'home-outline' },
+  { id: 'silly', label: 'Silly', icon: 'happy-outline' },
+];
+
+// =============================================================================
+// FLOATING PARTICLES COMPONENT (for dreamy background)
+// =============================================================================
+
+function FloatingParticles({ count = 12 }) {
+  const particles = useRef(
+    Array(count).fill(null).map(() => ({
+      x: new Animated.Value(Math.random() * width),
+      y: new Animated.Value(Math.random() * height),
+      opacity: new Animated.Value(Math.random() * 0.3 + 0.1),
+      size: Math.random() * 3 + 1,
+    }))
+  ).current;
+
+  useEffect(() => {
+    particles.forEach((particle, i) => {
+      const animateParticle = () => {
+        const duration = 20000 + Math.random() * 15000; // 20-35s
+        Animated.parallel([
+          Animated.timing(particle.y, {
+            toValue: -50,
+            duration,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.timing(particle.opacity, {
+              toValue: 0.4,
+              duration: duration / 2,
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.opacity, {
+              toValue: 0,
+              duration: duration / 2,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start(() => {
+          particle.y.setValue(height + 50);
+          particle.x.setValue(Math.random() * width);
+          particle.opacity.setValue(0.1);
+          animateParticle();
+        });
+      };
+      
+      // Stagger start times
+      setTimeout(animateParticle, i * 1500);
+    });
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {particles.map((particle, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.particle,
+            {
+              width: particle.size,
+              height: particle.size,
+              borderRadius: particle.size / 2,
+              opacity: particle.opacity,
+              transform: [
+                { translateX: particle.x },
+                { translateY: particle.y },
+              ],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// =============================================================================
+// DREAM PEBBLES PROGRESS INDICATOR
+// =============================================================================
+
+function DreamPebbles({ total, completed }) {
+  return (
+    <View style={styles.pebblesContainer}>
+      {Array(total).fill(null).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.pebble,
+            i < completed && styles.pebbleFilled,
+            i === completed && styles.pebbleCurrent,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
 export default function DreamTrailsGame({
   step,
   onSubmit,
@@ -78,6 +238,7 @@ export default function DreamTrailsGame({
   onExit,
   suggestedTrail = null,
 }) {
+  // Core game state
   const [gameState, setGameState] = useState(GAME_STATES.INTRO);
   const [needsIntro, setNeedsIntro] = useState(true);
   const [selectedTrail, setSelectedTrail] = useState(suggestedTrail);
@@ -91,21 +252,43 @@ export default function DreamTrailsGame({
   const [startTime] = useState(Date.now());
   const [usedItems, setUsedItems] = useState(new Set());
   
+  // v2 enhancements
+  const [currentVibe, setCurrentVibe] = useState(null);
+  const [showVibeSelector, setShowVibeSelector] = useState(false);
+  const [vibeSelected, setVibeSelected] = useState(false);
+  const [bgTheme, setBgTheme] = useState('night_sky');
+  const [scienceHintIndex, setScienceHintIndex] = useState(0);
+  const [itemEffects, setItemEffects] = useState([]); // Track which items have effects
+  
   const numScenes = step?.ui?.props?.scenes || DEFAULT_SCENES;
   const tilesPerScene = step?.ui?.props?.tiles_per_scene || DEFAULT_TILES_PER_SCENE;
   
-  // Animation refs for tiles
+  // Science-based hints to show periodically
+  const scienceHints = [
+    "Picture it for a few seconds… No need to be perfect.",
+    "You don't have to focus hard. Let the images be a bit fuzzy and far away.",
+    "Just notice each one and let it drift by.",
+    "Your brain is doing something different now. That's the point.",
+  ];
+  
+  // Animation refs
   const tileAnimations = useRef(
-    Array(tilesPerScene).fill(null).map(() => new Animated.Value(0))
+    Array(tilesPerScene).fill(null).map(() => ({
+      scale: new Animated.Value(0),
+      translateY: new Animated.Value(10),
+      opacity: new Animated.Value(0),
+    }))
   ).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const bgShiftAnim = useRef(new Animated.Value(0)).current;
 
   // Check if user has seen intro before
   useEffect(() => {
     checkIntroStatus();
+    startBackgroundAnimation();
   }, []);
 
-  // Fade in animation
+  // Fade in animation on state change
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -113,6 +296,26 @@ export default function DreamTrailsGame({
       useNativeDriver: true,
     }).start();
   }, [gameState]);
+  
+  // Slowly shift background
+  const startBackgroundAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bgShiftAnim, {
+          toValue: 1,
+          duration: 25000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(bgShiftAnim, {
+          toValue: 0,
+          duration: 25000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
 
   const checkIntroStatus = async () => {
     try {
@@ -159,39 +362,85 @@ export default function DreamTrailsGame({
   const startTrail = () => {
     if (!selectedTrail) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    generateSceneItems();
+    // Set default vibe based on trail
+    setCurrentVibe(TRAIL_CONFIG[selectedTrail].defaultVibe);
+    prepareScene(0);
     fadeTransition(GAME_STATES.SCENE);
   };
+  
+  // Prepare a scene - check if vibe selector should show
+  const prepareScene = (sceneIndex) => {
+    const sceneNum = sceneIndex + 1;
+    
+    // Check if this scene should show vibe selector
+    if (VIBE_SELECTOR_SCENES.includes(sceneNum)) {
+      setShowVibeSelector(true);
+      setVibeSelected(false);
+    } else {
+      setShowVibeSelector(false);
+      setVibeSelected(true);
+      generateSceneItems();
+    }
+    
+    // Update science hint
+    setScienceHintIndex(sceneIndex % scienceHints.length);
+  };
+  
+  // Handle vibe selection
+  const selectVibe = (vibeId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentVibe(vibeId);
+    setVibeSelected(true);
+    setShowVibeSelector(false);
+    generateSceneItems(vibeId);
+  };
 
-  const generateSceneItems = () => {
-    const items = TRAIL_ITEMS[selectedTrail];
+  const generateSceneItems = (vibeOverride = null) => {
+    const vibe = vibeOverride || currentVibe;
+    
+    // Mix trail items with vibe items
+    let baseItems = [...TRAIL_ITEMS[selectedTrail]];
+    if (vibe && VIBE_ITEMS[vibe]) {
+      // Add some vibe-specific items
+      baseItems = [...baseItems, ...VIBE_ITEMS[vibe]];
+    }
+    
     const newSceneItems = [];
+    const newEffects = [];
     const tempUsed = new Set(usedItems);
     
     for (let i = 0; i < tilesPerScene; i++) {
       // Get available items (not recently used)
-      let available = items.filter(item => !tempUsed.has(item));
+      let available = baseItems.filter(item => !tempUsed.has(item));
       
       // If we've used too many, reset the used set
       if (available.length < tilesPerScene) {
         tempUsed.clear();
-        available = items;
+        available = baseItems;
       }
       
       const randomIndex = Math.floor(Math.random() * available.length);
       const item = available[randomIndex];
       newSceneItems.push(item);
       tempUsed.add(item);
+      
+      // Check if item has a special effect
+      newEffects.push(EFFECT_ITEMS[item] || null);
     }
     
     setUsedItems(tempUsed);
     setSceneItems(newSceneItems);
+    setItemEffects(newEffects);
     setTilesRevealed(Array(tilesPerScene).fill(false));
     setShowTitlePrompt(false);
     setSceneTitle('');
     
     // Reset tile animations
-    tileAnimations.forEach(anim => anim.setValue(0));
+    tileAnimations.forEach(anim => {
+      anim.scale.setValue(0);
+      anim.translateY.setValue(10);
+      anim.opacity.setValue(0);
+    });
   };
 
   const revealTile = (index) => {
@@ -204,19 +453,52 @@ export default function DreamTrailsGame({
     setTilesRevealed(newRevealed);
     setTotalTilesRevealed(prev => prev + 1);
     
-    // Animate the tile
-    Animated.spring(tileAnimations[index], {
-      toValue: 1,
-      friction: 8,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
+    // Animate the tile with gentle drift-up effect
+    const anim = tileAnimations[index];
+    Animated.parallel([
+      Animated.spring(anim.scale, {
+        toValue: 1,
+        friction: 8,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim.translateY, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim.opacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Apply special effect if item has one
+    const effect = itemEffects[index];
+    if (effect === 'drift') {
+      // Gentle upward drift then settle
+      Animated.sequence([
+        Animated.timing(anim.translateY, {
+          toValue: -3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim.translateY, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
     
     // Check if all tiles revealed
     const allRevealed = newRevealed.every(r => r);
     if (allRevealed) {
       // Show title prompt on certain scenes
-      if ((currentScene + 1) % SCENE_TITLE_PROMPT_INTERVAL === 0 && currentScene < numScenes - 1) {
+      const sceneNum = currentScene + 1;
+      if (SCENE_TITLE_PROMPT_SCENES.includes(sceneNum) && currentScene < numScenes - 1) {
         setTimeout(() => setShowTitlePrompt(true), 800);
       }
     }
@@ -232,14 +514,22 @@ export default function DreamTrailsGame({
       // End of trail
       fadeTransition(GAME_STATES.END);
     } else {
-      setCurrentScene(prev => prev + 1);
-      generateSceneItems();
+      const nextSceneIndex = currentScene + 1;
+      setCurrentScene(nextSceneIndex);
+      prepareScene(nextSceneIndex);
     }
   };
 
   const skipScene = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    nextScene();
+    // If vibe selector is showing, skip it and generate items
+    if (showVibeSelector && !vibeSelected) {
+      setShowVibeSelector(false);
+      setVibeSelected(true);
+      generateSceneItems();
+    } else {
+      nextScene();
+    }
   };
 
   const handleExit = (confirm = false) => {
@@ -302,7 +592,7 @@ export default function DreamTrailsGame({
       <View style={styles.selectHeader}>
         <Text style={styles.selectTitle}>Pick tonight's trail</Text>
         <Text style={styles.selectSubtitle}>
-          You'll see tiny, random scenes from this theme.{'\n'}There's no right choice.
+          You'll see tiny, random scenes from this theme.{'\n'}There's no right choice. Takes about 3 minutes.
         </Text>
       </View>
       
@@ -342,9 +632,43 @@ export default function DreamTrailsGame({
     </Animated.View>
   );
 
+  // Render Vibe Selector
+  const renderVibeSelector = () => (
+    <View style={styles.vibeSelectorContainer}>
+      <Text style={styles.vibeLabel}>Choose a vibe for this scene:</Text>
+      <View style={styles.vibeButtons}>
+        {VIBES.map((vibe) => (
+          <TouchableOpacity
+            key={vibe.id}
+            style={[
+              styles.vibeButton,
+              currentVibe === vibe.id && styles.vibeButtonSelected,
+            ]}
+            onPress={() => selectVibe(vibe.id)}
+          >
+            <Ionicons 
+              name={vibe.icon} 
+              size={16} 
+              color={currentVibe === vibe.id ? '#FFFFFF' : 'rgba(255,255,255,0.6)'} 
+            />
+            <Text style={[
+              styles.vibeButtonText,
+              currentVibe === vibe.id && styles.vibeButtonTextSelected,
+            ]}>
+              {vibe.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
   // Render Scene
   const renderScene = () => (
     <Animated.View style={[styles.screenContainer, { opacity: fadeAnim }]}>
+      {/* Floating particles background */}
+      <FloatingParticles count={10} />
+      
       {/* Scene Header */}
       <View style={styles.sceneHeader}>
         <Text style={styles.sceneCount}>Scene {currentScene + 1} of {numScenes}</Text>
@@ -353,87 +677,110 @@ export default function DreamTrailsGame({
         </Text>
       </View>
       
-      {/* Tiles Grid */}
-      <View style={styles.tilesContainer}>
-        {sceneItems.map((item, index) => {
-          const isRevealed = tilesRevealed[index];
-          const scale = tileAnimations[index].interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.95, 1],
-          });
+      {/* Vibe Selector (on certain scenes, before tiles are shown) */}
+      {showVibeSelector && !vibeSelected && renderVibeSelector()}
+      
+      {/* Tiles Grid (only show after vibe is selected or on non-vibe scenes) */}
+      {vibeSelected && (
+        <>
+          <View style={styles.tilesContainer}>
+            {sceneItems.map((item, index) => {
+              const isRevealed = tilesRevealed[index];
+              const anim = tileAnimations[index];
+              const effect = itemEffects[index];
+              
+              return (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => revealTile(index)}
+                  activeOpacity={0.8}
+                  disabled={isRevealed}
+                >
+                  <Animated.View
+                    style={[
+                      styles.tile,
+                      isRevealed && styles.tileRevealed,
+                      effect === 'blur' && isRevealed && styles.tileBlur,
+                      { 
+                        transform: [
+                          { scale: anim.scale },
+                          { translateY: anim.translateY },
+                        ],
+                        opacity: isRevealed ? anim.opacity : 1,
+                      },
+                    ]}
+                  >
+                    {isRevealed ? (
+                      <View style={styles.tileContent}>
+                        <Text style={[
+                          styles.tileWord,
+                          effect === 'twinkle' && styles.tileWordTwinkle,
+                        ]}>
+                          {item}
+                        </Text>
+                        <View style={styles.tileCheckContainer}>
+                          <Ionicons 
+                            name="checkmark-circle" 
+                            size={14} 
+                            color="rgba(255,255,255,0.3)" 
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.tilePlaceholder}>
+                        <View style={styles.tilePlaceholderDot} />
+                      </View>
+                    )}
+                  </Animated.View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           
-          return (
-            <TouchableOpacity
-              key={index}
-              onPress={() => revealTile(index)}
-              activeOpacity={0.8}
-              disabled={isRevealed}
-            >
-              <Animated.View
-                style={[
-                  styles.tile,
-                  isRevealed && styles.tileRevealed,
-                  { transform: [{ scale }] },
-                ]}
-              >
-                {isRevealed ? (
-                  <View style={styles.tileContent}>
-                    <Text style={styles.tileWord}>{item}</Text>
-                    <Ionicons 
-                      name="checkmark-circle" 
-                      size={16} 
-                      color="rgba(255,255,255,0.4)" 
-                      style={styles.tileCheck}
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.tilePlaceholder}>
-                    <Ionicons name="sparkles" size={24} color="rgba(255,255,255,0.3)" />
-                  </View>
-                )}
-              </Animated.View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      
-      {/* Picture Prompt */}
-      {atLeastOneRevealed && (
-        <Text style={styles.picturePrompt}>Picture it for a few seconds…</Text>
+          {/* Science-based hint */}
+          {atLeastOneRevealed && (
+            <Text style={styles.picturePrompt}>
+              {scienceHints[scienceHintIndex]}
+            </Text>
+          )}
+          
+          {/* Scene Title Prompt (optional) */}
+          {showTitlePrompt && (
+            <View style={styles.titlePromptContainer}>
+              <Text style={styles.titlePromptLabel}>
+                If this was a photo, what would you call it? (Optional)
+              </Text>
+              <TextInput
+                style={styles.titleInput}
+                placeholder='Example: "Pillow Boat Party"'
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                value={sceneTitle}
+                onChangeText={setSceneTitle}
+                maxLength={50}
+              />
+            </View>
+          )}
+        </>
       )}
       
-      {/* Scene Title Prompt (optional) */}
-      {showTitlePrompt && (
-        <View style={styles.titlePromptContainer}>
-          <Text style={styles.titlePromptLabel}>
-            If this was a photo, what would you call it? (Optional)
-          </Text>
-          <TextInput
-            style={styles.titleInput}
-            placeholder='Example: "Pillow Boat Party"'
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            value={sceneTitle}
-            onChangeText={setSceneTitle}
-            maxLength={50}
-          />
-        </View>
-      )}
+      {/* Dream Pebbles Progress */}
+      <DreamPebbles total={numScenes} completed={currentScene} />
       
       {/* Bottom Actions */}
       <View style={styles.sceneActions}>
-        {allTilesRevealed ? (
+        {vibeSelected && allTilesRevealed ? (
           <TouchableOpacity style={styles.primaryButton} onPress={nextScene}>
             <Text style={styles.primaryButtonText}>
               {currentScene >= numScenes - 1 ? 'Finish trail' : 'Next scene'}
             </Text>
           </TouchableOpacity>
-        ) : (
+        ) : vibeSelected ? (
           <View style={styles.primaryButtonDisabled}>
             <Text style={styles.primaryButtonTextDisabled}>
               Reveal all tiles to continue
             </Text>
           </View>
-        )}
+        ) : null}
         
         <TouchableOpacity style={styles.skipButton} onPress={skipScene}>
           <Text style={styles.skipButtonText}>Skip scene</Text>
@@ -450,6 +797,9 @@ export default function DreamTrailsGame({
   // Render End Screen
   const renderEnd = () => (
     <Animated.View style={[styles.screenContainer, { opacity: fadeAnim }]}>
+      {/* Floating particles for dreamy end */}
+      <FloatingParticles count={8} />
+      
       <View style={styles.endContent}>
         <Ionicons name="moon-outline" size={64} color="rgba(255,255,255,0.6)" />
         <Text style={styles.endTitle}>Nice wandering.</Text>
@@ -457,6 +807,12 @@ export default function DreamTrailsGame({
           {isStandalone
             ? "You just gave your brain something gentle and random to chew on instead of the usual spiral."
             : "You just walked through a few random scenes instead of replaying your spiral. That's a real shift for your brain."}
+        </Text>
+        
+        {/* Sleep-direction science cue */}
+        <Text style={styles.endSleepCue}>
+          Let all these little scenes drift away now.{'\n'}
+          You've given your brain something softer for tonight.
         </Text>
         
         <TouchableOpacity style={styles.primaryButton} onPress={handleFinish}>
@@ -828,5 +1184,114 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
+  },
+  
+  // ==========================================================================
+  // V2 ENHANCEMENTS
+  // ==========================================================================
+  
+  // Floating Particles
+  particle: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  
+  // Dream Pebbles Progress
+  pebblesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 16,
+  },
+  pebble: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  pebbleFilled: {
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  pebbleCurrent: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  
+  // Vibe Selector
+  vibeSelectorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  vibeLabel: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  vibeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  vibeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    gap: 6,
+  },
+  vibeButtonSelected: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  vibeButtonText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  vibeButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+  
+  // Enhanced Tile Styles
+  tilePlaceholderDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  tileBlur: {
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  tileWordTwinkle: {
+    textShadowColor: 'rgba(255,255,255,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  tileCheckContainer: {
+    position: 'absolute',
+    top: -35,
+    right: -25,
+  },
+  
+  // End Screen Sleep Cue
+  endSleepCue: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontStyle: 'italic',
+    marginBottom: 32,
   },
 });
