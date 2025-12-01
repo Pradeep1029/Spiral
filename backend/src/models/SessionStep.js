@@ -55,6 +55,8 @@ const sessionStepSchema = new mongoose.Schema({
       'choice_buttons',
       'sleep_choice',
       'crisis_info',
+      // Dream Trails game
+      'dream_trails_game',
     ],
     required: true,
   },
