@@ -729,6 +729,7 @@ export default function DreamTrailsGame({
                     ) : (
                       <View style={styles.tilePlaceholder}>
                         <View style={styles.tilePlaceholderDot} />
+                        <Text style={styles.tilePlaceholderLabel}>Tap to reveal</Text>
                       </View>
                     )}
                   </Animated.View>

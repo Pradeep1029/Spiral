@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 export default function BreathingStep({ step, onAnswerChange }) {
   const [phase, setPhase] = useState('inhale');
   const [breathCount, setBreathCount] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0.3)).current;
   const animationRef = useRef(null);
@@ -12,6 +13,7 @@ export default function BreathingStep({ step, onAnswerChange }) {
   const targetBreaths = props.breath_count || 4;
   const inhaleTime = props.inhale_sec || 4;
   const exhaleTime = props.exhale_sec || 6;
+  const totalDurationSec = (inhaleTime + exhaleTime) * targetBreaths;
 
   useEffect(() => {
     let isActive = true;
@@ -70,14 +72,13 @@ export default function BreathingStep({ step, onAnswerChange }) {
               completed: newCount >= targetBreaths,
               breaths_completed: newCount,
             });
-
-            // Continue or stop
-            if (newCount < targetBreaths) {
-              runBreathCycle();
-            }
             
             return newCount;
           });
+
+          if (isActive) {
+            runBreathCycle();
+          }
         });
       });
     };
@@ -91,6 +92,28 @@ export default function BreathingStep({ step, onAnswerChange }) {
       opacityAnim.stopAnimation();
     };
   }, []);
+
+  useEffect(() => {
+    if (elapsedSec >= totalDurationSec) return;
+
+    const interval = setInterval(() => {
+      setElapsedSec(prev => {
+        if (prev >= totalDurationSec) return prev;
+        const next = prev + 1;
+
+        if (next >= totalDurationSec) {
+          onAnswerChange({
+            completed: true,
+            breaths_completed: breathCount,
+          });
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [elapsedSec, totalDurationSec, breathCount, onAnswerChange]);
 
   return (
     <View style={styles.container}>
@@ -138,9 +161,9 @@ export default function BreathingStep({ step, onAnswerChange }) {
       </View>
 
       <Text style={styles.hint}>
-        {breathCount >= targetBreaths 
-          ? "Great! Tap 'Next' when you're ready." 
-          : "Follow the circle. Breathe with it."}
+        {breathCount >= targetBreaths
+          ? "Great! Tap 'Next' when you're ready, or keep breathing with the circle."
+          : `About ${Math.max(totalDurationSec - elapsedSec, 0)}s until you can move on. Follow the circle and breathe with it.`}
       </Text>
     </View>
   );
