@@ -20,7 +20,7 @@ export default function PrimaryButton({ label, onPress, style, disabled }) {
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#F9E66A',
+    backgroundColor: '#2A9D8F',
     paddingVertical: 18,
     borderRadius: 999,
     alignItems: 'center',
@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   label: {
-    color: '#111827',
+    color: '#F8F9FA',
     fontSize: 18,
     fontWeight: '700',
   },

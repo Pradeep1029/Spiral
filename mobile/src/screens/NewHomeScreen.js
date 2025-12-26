@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,32 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import api from '../services/api';
 
 export default function NewHomeScreen({ navigation }) {
+  const [suggestion, setSuggestion] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchSuggestion = async () => {
+      try {
+        const res = await api.get('/personalization/home-suggestion');
+        const text = res.data?.data?.suggestion_text;
+        if (mounted) setSuggestion(typeof text === 'string' ? text : '');
+      } catch {
+        if (mounted) setSuggestion('');
+      }
+    };
+
+    fetchSuggestion();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleSpiraling = async () => {
-    navigation.navigate('ResetSession');
+    navigation.navigate('SpiralFlow');
   };
 
   return (
@@ -19,7 +41,7 @@ export default function NewHomeScreen({ navigation }) {
       <StatusBar barStyle="light-content" />
 
       <LinearGradient
-        colors={['#0f0c29', '#302b63', '#24243e']}
+        colors={['#0A1128', '#050814', '#0A1128']}
         style={styles.gradient}
       >
         <View style={styles.content}>
@@ -29,13 +51,19 @@ export default function NewHomeScreen({ navigation }) {
             <Text style={styles.subtitle}>For brains that won't shut up at night.</Text>
           </View>
 
+          {!!suggestion && (
+            <View style={styles.suggestionBox}>
+              <Text style={styles.suggestionText}>{suggestion}</Text>
+            </View>
+          )}
+
           {/* Main Action Button */}
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleSpiraling}
             activeOpacity={0.8}
           >
-            <Text style={styles.primaryButtonText}>I'M SPIRALLING</Text>
+            <Text style={styles.primaryButtonText}>I'm spiralling</Text>
           </TouchableOpacity>
 
           {/* Footer */}
@@ -51,7 +79,7 @@ export default function NewHomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0c29',
+    backgroundColor: '#0A1128',
   },
   gradient: {
     flex: 1,
@@ -64,34 +92,47 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 80,
+    marginBottom: 38,
   },
   title: {
     fontSize: 48,
     fontWeight: '300',
-    color: '#FFFFFF',
+    color: '#F8F9FA',
     marginBottom: 8,
     letterSpacing: 2,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(248, 249, 250, 0.6)',
     fontWeight: '300',
+  },
+  suggestionBox: {
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(21, 34, 56, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(248, 249, 250, 0.12)',
+    marginBottom: 16,
+  },
+  suggestionText: {
+    fontSize: 13,
+    color: 'rgba(248, 249, 250, 0.6)',
+    lineHeight: 18,
   },
   primaryButton: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    paddingVertical: 24,
-    paddingHorizontal: 32,
+    backgroundColor: '#2A9D8F',
+    borderRadius: 999,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '500',
+    color: '#F8F9FA',
+    fontSize: 18,
+    fontWeight: '700',
     textAlign: 'center',
   },
   secondaryButton: {
@@ -161,12 +202,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(248, 249, 250, 0.4)',
     fontSize: 13,
     textAlign: 'center',
   },
   footerLink: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(248, 249, 250, 0.6)',
     textDecorationLine: 'underline',
   },
 });

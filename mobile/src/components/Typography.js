@@ -29,17 +29,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#F7FAFC',
+    color: '#F8F9FA',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(248,249,250,0.85)',
     marginBottom: 8,
   },
   body: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(248,249,250,0.8)',
   },
 });

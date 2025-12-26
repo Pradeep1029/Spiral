@@ -7,7 +7,8 @@ const PROD_BASE_URL = 'https://spiral.railway.internal/api/v1';
 const LOCAL_WEB_BASE_URL = 'http://localhost:3011/api/v1';
 const LOCAL_LAN_BASE_URL = 'http://10.34.181.8:3011/api/v1';
 
-const DEV_BASE_URL = Platform.OS === 'web' ? LOCAL_WEB_BASE_URL : LOCAL_LAN_BASE_URL;
+const ENV_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const DEV_BASE_URL = ENV_BASE_URL || (Platform.OS === 'web' ? LOCAL_WEB_BASE_URL : LOCAL_LAN_BASE_URL);
 
 const api = axios.create({
   // During local development, always point to the dev backend

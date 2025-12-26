@@ -13,7 +13,7 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
 // Import routes
-const resetRoutes = require('./routes/resetRoutes');
+const spiralRoutes = require('./routes/spiralRoutes');
 const personalizationRoutes = require('./routes/personalizationRoutes');
 const authRoutes = require('./routes/authRoutes');
 const voiceRoutes = require('./routes/voiceRoutes');
@@ -98,7 +98,7 @@ app.get('/health', (req, res) => {
 // API Routes
 const API_VERSION = '/api/v1';
 
-app.use(`${API_VERSION}/reset`, apiLimiter, resetRoutes);
+app.use(`${API_VERSION}/spiral`, apiLimiter, spiralRoutes);
 app.use(`${API_VERSION}/personalization`, apiLimiter, personalizationRoutes);
 app.use(`${API_VERSION}/auth`, apiLimiter, authRoutes);
 app.use(`${API_VERSION}/voice`, apiLimiter, voiceRoutes);

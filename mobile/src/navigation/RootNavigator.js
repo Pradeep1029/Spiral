@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import NewHomeScreen from '../screens/NewHomeScreen';
-import ResetSessionScreen from '../screens/ResetSessionScreen';
+import SpiralFlowScreen from '../screens/SpiralFlowScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -10,8 +10,8 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Home" component={NewHomeScreen} />
       <Stack.Screen
-        name="ResetSession"
-        component={ResetSessionScreen}
+        name="SpiralFlow"
+        component={SpiralFlowScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

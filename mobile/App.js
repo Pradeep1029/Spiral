@@ -9,10 +9,10 @@ const navTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#050814',
-    card: '#050814',
-    text: '#F7FAFC',
-    border: 'rgba(255,255,255,0.08)',
+    background: '#0A1128',
+    card: '#0A1128',
+    text: '#F8F9FA',
+    border: 'rgba(248,249,250,0.08)',
   },
 };
 

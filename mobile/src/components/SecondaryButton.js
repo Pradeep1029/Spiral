@@ -7,7 +7,7 @@ export default function SecondaryButton({ label, onPress, style }) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        pressed && { backgroundColor: 'rgba(249, 230, 106, 0.06)' },
+        pressed && { backgroundColor: 'rgba(42, 157, 143, 0.10)' },
         style,
       ]}
     >
@@ -22,13 +22,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(249, 230, 106, 0.4)',
+    borderColor: 'rgba(42, 157, 143, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 6,
   },
   label: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(248,249,250,0.92)',
     fontSize: 16,
     fontWeight: '500',
   },

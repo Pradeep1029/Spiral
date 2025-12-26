@@ -8,7 +8,7 @@ export default function Screen({ children, scrollable = false, center = false })
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={["#050814", "#06091a", "#050814"]}
+        colors={["#0A1128", "#050814", "#0A1128"]}
         style={StyleSheet.absoluteFill}
       />
       <Container
@@ -27,7 +27,7 @@ export default function Screen({ children, scrollable = false, center = false })
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#050814',
+    backgroundColor: '#0A1128',
   },
   content: {
     flexGrow: 1,
