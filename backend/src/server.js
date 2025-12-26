@@ -11,21 +11,12 @@ const connectDB = require('./config/database');
 const logger = require('./config/logger');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
-const { initializeScheduler } = require('./services/schedulerService');
 
 // Import routes
+const resetRoutes = require('./routes/resetRoutes');
+const personalizationRoutes = require('./routes/personalizationRoutes');
 const authRoutes = require('./routes/authRoutes');
-const onboardingRoutes = require('./routes/onboardingRoutes');
-const sessionRoutes = require('./routes/sessionRoutes');
-const insightsRoutes = require('./routes/insightsRoutes');
-const checkInRoutes = require('./routes/checkInRoutes');
-const compassionRoutes = require('./routes/compassionRoutes');
-const progressRoutes = require('./routes/progressRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
-// v2 Routes
-const trainingRoutes = require('./routes/trainingRoutes');
-const archetypeRoutes = require('./routes/archetypeRoutes');
-const autopilotRoutes = require('./routes/autopilotRoutes');
+const voiceRoutes = require('./routes/voiceRoutes');
 
 // Initialize express app
 const app = express();
@@ -42,7 +33,12 @@ app.use(helmet());
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGINS.split(',');
+    const raw = process.env.CORS_ORIGINS;
+    if (!raw) {
+      return callback(null, true);
+    }
+
+    const allowedOrigins = raw.split(',');
     
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
@@ -102,23 +98,10 @@ app.get('/health', (req, res) => {
 // API Routes
 const API_VERSION = '/api/v1';
 
-app.use(`${API_VERSION}/auth`, authRoutes);
-app.use(`${API_VERSION}/onboarding`, apiLimiter, onboardingRoutes);
-
-// New AI-first routes
-app.use(`${API_VERSION}/sessions`, apiLimiter, sessionRoutes);
-app.use(`${API_VERSION}/insights`, apiLimiter, insightsRoutes);
-
-// v2 Routes - Training Mode, Archetypes & Autopilot
-app.use(`${API_VERSION}/training`, apiLimiter, trainingRoutes);
-app.use(`${API_VERSION}/archetypes`, apiLimiter, archetypeRoutes);
-app.use(`${API_VERSION}/autopilot`, apiLimiter, autopilotRoutes);
-
-// Legacy routes (keep for backward compatibility)
-app.use(`${API_VERSION}/checkins`, apiLimiter, checkInRoutes);
-app.use(`${API_VERSION}/compassion`, apiLimiter, compassionRoutes);
-app.use(`${API_VERSION}/progress`, apiLimiter, progressRoutes);
-app.use(`${API_VERSION}/notifications`, apiLimiter, notificationRoutes);
+app.use(`${API_VERSION}/reset`, apiLimiter, resetRoutes);
+app.use(`${API_VERSION}/personalization`, apiLimiter, personalizationRoutes);
+app.use(`${API_VERSION}/auth`, apiLimiter, authRoutes);
+app.use(`${API_VERSION}/voice`, apiLimiter, voiceRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {
@@ -141,7 +124,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3011;
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`
@@ -155,9 +138,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     ║                                       ║
     ╚═══════════════════════════════════════╝
   `);
-  
-  // Initialize scheduler for notifications
-  initializeScheduler();
 });
 
 // Handle unhandled promise rejections

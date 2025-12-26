@@ -3,6 +3,11 @@ const logger = require('./logger');
 
 const connectDB = async () => {
   try {
+    if (!process.env.MONGODB_URI) {
+      logger.error('MONGODB_URI not set. Database is required.');
+      process.exit(1);
+    }
+
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       // Mongoose 6+ no longer needs these options, but keeping for compatibility
       // useNewUrlParser: true,

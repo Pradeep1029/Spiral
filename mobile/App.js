@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RootNavigator from './src/navigation/RootNavigator';
-import { AuthProvider } from './src/context/AuthContext';
+import { bootstrapAuth } from './src/services/auth';
 
 const navTheme = {
   ...DefaultTheme,
@@ -17,14 +17,18 @@ const navTheme = {
 };
 
 export default function App() {
+  useEffect(() => {
+    bootstrapAuth().catch(() => {
+      // If auth fails, app still works in limited mode (no secure progress sync)
+    });
+  }, []);
+
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer theme={navTheme}>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </NavigationContainer>
-      </AuthProvider>
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style="light" />
+        <RootNavigator />
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }

@@ -8,27 +8,10 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function NewHomeScreen({ navigation }) {
   const handleSpiraling = async () => {
-    // Navigate to spiral rescue flow (sleep-related by default)
-    navigation.navigate('SessionFlow', {
-      context: 'spiral',
-      sleepRelated: true,
-    });
-  };
-
-  const handleCrisis = () => {
-    navigation.navigate('Safety');
-  };
-
-  const handleTraining = () => {
-    navigation.navigate('TrainingSelection');
-  };
-
-  const handleDreamTrails = () => {
-    navigation.navigate('DreamTrails');
+    navigation.navigate('ResetSession');
   };
 
   return (
@@ -52,29 +35,12 @@ export default function NewHomeScreen({ navigation }) {
             onPress={handleSpiraling}
             activeOpacity={0.8}
           >
-            <Text style={styles.primaryButtonText}>I'm spiraling</Text>
-          </TouchableOpacity>
-
-          {/* Dream Trails standalone entry */}
-          <TouchableOpacity onPress={handleDreamTrails} style={styles.dreamTrailsButton}>
-            <Ionicons name="moon-outline" size={18} color="rgba(139, 126, 200, 0.9)" />
-            <Text style={styles.dreamTrailsText}>Can't sleep? Play Dream Trails</Text>
-          </TouchableOpacity>
-
-          {/* Training Mode Link */}
-          <TouchableOpacity onPress={handleTraining} style={styles.trainingLink}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="rgba(249, 230, 106, 0.8)" />
-            <Text style={styles.trainingLinkText}>Build my defenses</Text>
+            <Text style={styles.primaryButtonText}>I'M SPIRALLING</Text>
           </TouchableOpacity>
 
           {/* Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity onPress={handleCrisis}>
-              <Text style={styles.footerText}>
-                Not for emergencies.{' '}
-                <Text style={styles.footerLink}>Tap here if you're in crisis.</Text>
-              </Text>
-            </TouchableOpacity>
+            <Text style={styles.footerText}>Not for emergencies.</Text>
           </View>
         </View>
       </LinearGradient>
@@ -152,22 +118,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textDecorationLine: 'underline',
   },
-  trainingLink: {
+  secondaryLinksRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 32,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 16,
+  },
+  smallLink: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(249, 230, 106, 0.3)',
-    backgroundColor: 'rgba(249, 230, 106, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  trainingLinkText: {
-    color: 'rgba(249, 230, 106, 0.9)',
-    fontSize: 15,
+  smallLinkText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
     fontWeight: '500',
-    marginLeft: 8,
   },
   dreamTrailsButton: {
     flexDirection: 'row',
