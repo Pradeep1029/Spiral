@@ -21,7 +21,12 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.unspiral.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Unspiral uses the microphone so you can record a short voice note when typing feels hard."
+      }
     },
     "android": {
       "adaptiveIcon": {

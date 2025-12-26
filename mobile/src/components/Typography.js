@@ -17,6 +17,22 @@ export function Subtitle({ children, style, ...props }) {
   );
 }
 
+export function Guidance({ children, style, ...props }) {
+  return (
+    <Text style={[styles.guidance, style]} {...props}>
+      {children}
+    </Text>
+  );
+}
+
+export function Context({ children, style, ...props }) {
+  return (
+    <Text style={[styles.context, style]} {...props}>
+      {children}
+    </Text>
+  );
+}
+
 export function Body({ children, style, ...props }) {
   return (
     <Text style={[styles.body, style]} {...props}>
@@ -27,19 +43,35 @@ export function Body({ children, style, ...props }) {
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#F8F9FA',
+    color: '#FFFFFF',
+    lineHeight: 40,
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '500',
-    color: 'rgba(248,249,250,0.85)',
+    color: 'rgba(248,249,250,0.9)',
+    lineHeight: 26,
     marginBottom: 8,
+  },
+  guidance: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: 'rgba(248,249,250,0.9)',
+    lineHeight: 26,
+  },
+  context: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: 'rgba(248,249,250,0.55)',
+    lineHeight: 21,
   },
   body: {
     fontSize: 16,
     color: 'rgba(248,249,250,0.8)',
+    lineHeight: 24,
   },
 });

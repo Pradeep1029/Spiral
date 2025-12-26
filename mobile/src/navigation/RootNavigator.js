@@ -12,7 +12,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="SpiralFlow"
         component={SpiralFlowScreen}
-        options={{ presentation: 'modal' }}
+        options={{
+          presentation: 'modal',
+          animation: 'fade',
+          animationDuration: 600,
+        }}
       />
     </Stack.Navigator>
   );

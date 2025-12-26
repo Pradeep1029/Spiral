@@ -1,5 +1,4 @@
 import React from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import { View, StyleSheet, ScrollView } from 'react-native';
 
 export default function Screen({ children, scrollable = false, center = false }) {
@@ -7,10 +6,6 @@ export default function Screen({ children, scrollable = false, center = false })
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={["#0A1128", "#050814", "#0A1128"]}
-        style={StyleSheet.absoluteFill}
-      />
       <Container
         contentContainerStyle={[
           styles.content,
@@ -27,7 +22,7 @@ export default function Screen({ children, scrollable = false, center = false })
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0A1128',
+    backgroundColor: '#0B1016',
   },
   content: {
     flexGrow: 1,

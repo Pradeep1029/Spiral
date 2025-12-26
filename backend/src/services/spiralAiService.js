@@ -3,6 +3,8 @@ const logger = require('../config/logger');
 const SpiralSession = require('../models/SpiralSession');
 
 const MODEL = 'gpt-5-mini-2025-08-07';
+const MAX_COMPLETION_TOKENS_TEXT = 220;
+const MAX_COMPLETION_TOKENS_JSON = 420;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -51,17 +53,15 @@ function summarizeSessions(summaries) {
     .join('\n');
 }
 
-async function chatJson({ system, user, maxTokens = 250, temperature = 0.2 }) {
+async function chatJson({ system, user }) {
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
+      max_completion_tokens: MAX_COMPLETION_TOKENS_JSON,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      temperature,
-      max_tokens: maxTokens,
-      response_format: { type: 'json_object' },
     });
 
     const content = response.choices?.[0]?.message?.content;
@@ -73,16 +73,15 @@ async function chatJson({ system, user, maxTokens = 250, temperature = 0.2 }) {
   }
 }
 
-async function chatText({ system, user, maxTokens = 120, temperature = 0.4 }) {
+async function chatText({ system, user }) {
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
+      max_completion_tokens: MAX_COMPLETION_TOKENS_TEXT,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      temperature,
-      max_tokens: maxTokens,
     });
 
     const content = response.choices?.[0]?.message?.content;
@@ -109,7 +108,7 @@ async function homeSuggestion({ userId, now = new Date() }) {
 
     const user = `Time: ${now.toISOString()}\nRecent sessions:\n${history}`;
 
-    const text = await chatText({ system, user, maxTokens: 60, temperature: 0.4 });
+    const text = await chatText({ system, user });
     return safeOneOrTwoSentences(text);
   } catch (err) {
     logger.warn('homeSuggestion failed', { error: err?.message });
@@ -127,7 +126,7 @@ async function arrivalGreeting({ userId, now = new Date() }) {
 
     const user = `Time: ${now.toISOString()}\nRecent sessions:\n${history}`;
 
-    const text = await chatText({ system, user, maxTokens: 90, temperature: 0.5 });
+    const text = await chatText({ system, user });
     return safeOneOrTwoSentences(text);
   } catch (err) {
     logger.warn('arrivalGreeting failed', { error: err?.message });
@@ -145,7 +144,7 @@ async function bodyScanResponse({ userId, locationTapped, now = new Date() }) {
 
     const user = `Tapped location: ${locationTapped}\nTime: ${now.toISOString()}\nRecent sessions:\n${history}`;
 
-    const text = await chatText({ system, user, maxTokens: 110, temperature: 0.45 });
+    const text = await chatText({ system, user });
     return safeOneOrTwoSentences(text);
   } catch (err) {
     logger.warn('bodyScanResponse failed', { error: err?.message });
@@ -159,7 +158,7 @@ async function decidePath({ spiralText }) {
 
   const user = `Spiral text: ${JSON.stringify(String(spiralText || ''))}`;
 
-  const parsed = await chatJson({ system, user, maxTokens: 200, temperature: 0.2 });
+  const parsed = await chatJson({ system, user });
   if (!parsed) return null;
 
   const path = String(parsed.path || '').toUpperCase();
@@ -195,7 +194,7 @@ async function generatePrompts({ path, spiralText }) {
 
   const user = `User spiral: ${JSON.stringify(String(spiralText || ''))}`;
 
-  const parsed = await chatJson({ system, user, maxTokens: 260, temperature: 0.35 });
+  const parsed = await chatJson({ system, user });
   const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts : null;
   if (!prompts || prompts.length !== 3) return null;
 
@@ -215,7 +214,7 @@ async function closureValidation({
 
     const user = `Intensity pre: ${intensityPre}\nIntensity post: ${intensityPost}\nPath: ${pathUsed}\nBody before: ${bodyLocationBefore}\nBody after: ${bodyLocationAfter}`;
 
-    const text = await chatText({ system, user, maxTokens: 120, temperature: 0.4 });
+    const text = await chatText({ system, user });
     return safeOneOrTwoSentences(text);
   } catch (err) {
     logger.warn('closureValidation failed', { error: err?.message });
@@ -233,7 +232,7 @@ async function anchorRecommendation({ userId, pathUsed, intensityPre, intensityP
 
     const user = `Path used: ${pathUsed}\nIntensity pre: ${intensityPre}\nIntensity post: ${intensityPost}\nRecent sessions:\n${history}`;
 
-    const parsed = await chatJson({ system, user, maxTokens: 80, temperature: 0.2 });
+    const parsed = await chatJson({ system, user });
     const rec = Number(parsed?.recommended);
     if (![0, 1, 2, 3].includes(rec)) return null;
     return rec;

@@ -1,21 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import Screen from '../components/Screen';
-import { Title, Subtitle, Body } from '../components/Typography';
+import { Title, Subtitle, Body, Guidance, Context } from '../components/Typography';
 import PrimaryButton from '../components/PrimaryButton';
 import SecondaryButton from '../components/SecondaryButton';
 import api from '../services/api';
 
 const COLORS = {
-  bg: '#0A1128',
-  surface: '#152238',
+  bg: '#0B1016',
+  surface: '#161C24',
   primary: '#2A9D8F',
   terracotta: '#E76F51',
-  text: '#F8F9FA',
-  muted: 'rgba(248,249,250,0.6)',
+  text: '#FFFFFF',
+  guidance: 'rgba(248,249,250,0.9)',
+  muted: 'rgba(248,249,250,0.55)',
+  faint: 'rgba(248,249,250,0.15)',
+  inputBg: 'rgba(255,255,255,0.03)',
 };
 
 const BODY_LOCATIONS = [
@@ -38,9 +41,12 @@ const STEPS = {
   bodyScan: 'bodyScan',
   spiralText: 'spiralText',
   path: 'path',
+  microCheck: 'microCheck',
+  compassionPause: 'compassionPause',
   closureSigh: 'closureSigh',
   closureCheck: 'closureCheck',
   anchor: 'anchor',
+  completion: 'completion',
   done: 'done',
 };
 
@@ -56,11 +62,45 @@ function formatSeconds(sec) {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
+function countWords(text) {
+  const t = String(text || '').trim();
+  if (!t) return 0;
+  return t.split(/\s+/).filter(Boolean).length;
+}
+
+function getPhaseMeta(step) {
+  if (step === STEPS.sigh1 || step === STEPS.bodyScan) {
+    return { label: 'Body work', time: 'About 2 min left' };
+  }
+
+  if (step === STEPS.spiralText || step === STEPS.path) {
+    return { label: 'Thinking part', time: 'About 1 min left' };
+  }
+
+  if (step === STEPS.closureSigh || step === STEPS.closureCheck || step === STEPS.anchor) {
+    return { label: 'Almost done', time: 'About 30 sec left' };
+  }
+
+  return { label: 'Start', time: 'About 3 min' };
+}
+
+function safeImpact(kind) {
+  try {
+    if (kind === 'light') return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (kind === 'medium') return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (kind === 'heavy') return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  } catch {}
+  return null;
+}
+
 export default function SpiralFlowScreen({ navigation }) {
   const startedAtRef = useRef(null);
   const sessionIdRef = useRef(null);
 
   const [step, setStep] = useState(STEPS.arrival);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const transitionOpacity = useRef(new Animated.Value(1)).current;
+  const transitioningRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState(null);
 
@@ -69,11 +109,34 @@ export default function SpiralFlowScreen({ navigation }) {
   const [sighRemaining, setSighRemaining] = useState(null);
   const sighIntervalRef = useRef(null);
 
+  const breathAnim = useRef(new Animated.Value(0.18)).current;
+  const breathSeqCancelRef = useRef({ cancelled: false });
+  const [breathCue, setBreathCue] = useState('');
+
+  const [microCheckRemaining, setMicroCheckRemaining] = useState(null);
+  const microCheckIntervalRef = useRef(null);
+  const [microCheckText, setMicroCheckText] = useState('');
+  const [microCheckLine2, setMicroCheckLine2] = useState('');
+  const microCheckTextTimersRef = useRef([]);
+  const microCheckGlowChest = useRef(new Animated.Value(0)).current;
+  const microCheckGlowBelly = useRef(new Animated.Value(0)).current;
+  const microCheckGlowBoth = useRef(new Animated.Value(0)).current;
+  const microCheckBreath = useRef(new Animated.Value(0)).current;
+  const microCheckPulse = useRef(null);
+
+  const [compassionRemaining, setCompassionRemaining] = useState(null);
+  const compassionIntervalRef = useRef(null);
+  const compassionPulse = useRef(null);
+  const compassionChest = useRef(new Animated.Value(0)).current;
+  const compassionDoneRef = useRef(false);
+
   const [bodyLocationPre, setBodyLocationPre] = useState(null);
   const [bodyText, setBodyText] = useState('');
   const [intensityPre, setIntensityPre] = useState(6);
 
   const [spiralText, setSpiralText] = useState('');
+  const [spiralPlaceholder, setSpiralPlaceholder] = useState("Example: I'm going to fail this presentation");
+  const [spiralFocused, setSpiralFocused] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
@@ -92,21 +155,9 @@ export default function SpiralFlowScreen({ navigation }) {
   const [anchorRecommended, setAnchorRecommended] = useState(0);
   const [anchorSelected, setAnchorSelected] = useState(null);
 
-  const progress = useMemo(() => {
-    const order = [
-      STEPS.arrival,
-      STEPS.sigh1,
-      STEPS.bodyScan,
-      STEPS.spiralText,
-      STEPS.path,
-      STEPS.closureSigh,
-      STEPS.closureCheck,
-      STEPS.anchor,
-    ];
-    const idx = order.indexOf(step);
-    const pct = Math.round(((Math.max(0, idx) + 1) / order.length) * 100);
-    return clamp(pct, 0, 100);
-  }, [step]);
+  const [completionPhase, setCompletionPhase] = useState(1);
+
+  const phaseMeta = useMemo(() => getPhaseMeta(step), [step]);
 
   const stopTimer = (ref, setFn) => {
     if (ref.current) {
@@ -114,6 +165,28 @@ export default function SpiralFlowScreen({ navigation }) {
       ref.current = null;
     }
     setFn(null);
+  };
+
+  const renderCompassionPause = () => {
+    return (
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen center>
+          {renderHeaderRow()}
+          <Guidance style={{ marginTop: 16, textAlign: 'center' }}>
+            Hand on heart.
+          </Guidance>
+          <Guidance style={{ marginTop: 10, textAlign: 'center' }}>
+            Say the kind version to yourself.
+          </Guidance>
+
+          <View style={styles.torsoWrap}>
+            <View style={styles.torsoOutline}>
+              <Animated.View pointerEvents="none" style={[styles.torsoGlowChest, { opacity: compassionChest }]} />
+            </View>
+          </View>
+        </Screen>
+      </Animated.View>
+    );
   };
 
   const startTimer = (seconds, ref, setFn, onDone) => {
@@ -177,6 +250,10 @@ export default function SpiralFlowScreen({ navigation }) {
   useEffect(() => {
     startedAtRef.current = Date.now();
 
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((v) => setReduceMotion(!!v))
+      .catch(() => setReduceMotion(false));
+
     const boot = async () => {
       setLoading(true);
       setSessionError(null);
@@ -208,12 +285,98 @@ export default function SpiralFlowScreen({ navigation }) {
     return () => {
       stopTimer(sighIntervalRef, setSighRemaining);
       stopTimer(closureIntervalRef, setClosureSighRemaining);
+      stopTimer(microCheckIntervalRef, setMicroCheckRemaining);
+      stopTimer(compassionIntervalRef, setCompassionRemaining);
+      if (microCheckTextTimersRef.current?.length) {
+        microCheckTextTimersRef.current.forEach((t) => clearTimeout(t));
+        microCheckTextTimersRef.current = [];
+      }
+      if (microCheckPulse.current) {
+        try {
+          microCheckPulse.current.stop();
+        } catch {}
+        microCheckPulse.current = null;
+      }
+      if (compassionPulse.current) {
+        try {
+          compassionPulse.current.stop();
+        } catch {}
+        compassionPulse.current = null;
+      }
+      breathSeqCancelRef.current.cancelled = true;
     };
   }, []);
 
   useEffect(() => {
     syncProgress({ current_step: step });
   }, [step]);
+
+  const goToStep = async (nextStep) => {
+    if (nextStep === step) return;
+    if (transitioningRef.current) {
+      setStep(nextStep);
+      return;
+    }
+
+    if (reduceMotion) {
+      setStep(nextStep);
+      return;
+    }
+
+    transitioningRef.current = true;
+
+    await new Promise((resolve) => {
+      Animated.timing(transitionOpacity, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }).start(() => resolve());
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    setStep(nextStep);
+
+    await new Promise((resolve) => {
+      Animated.timing(transitionOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start(() => resolve());
+    });
+
+    transitioningRef.current = false;
+  };
+
+  useEffect(() => {
+    const examples = [
+      "Example: I'm going to fail this presentation",
+      "Example: I can't do anything right",
+      "Example: What if they think I'm stupid",
+    ];
+    let idx = 0;
+    const id = setInterval(() => {
+      if (spiralFocused) return;
+      if (String(spiralText || '').trim()) return;
+      idx = (idx + 1) % examples.length;
+      setSpiralPlaceholder(examples[idx]);
+    }, 4000);
+    return () => clearInterval(id);
+  }, [spiralFocused, spiralText]);
+
+  const withSliderHaptics = (setter) => {
+    const lastRef = { current: null };
+    return async (v) => {
+      const next = Number(v);
+      const prev = lastRef.current;
+      lastRef.current = next;
+      setter(next);
+      if (prev === null || prev === next) return;
+      if (next === 0 || next === 10) await safeImpact('heavy');
+      else if (next === 5) await safeImpact('medium');
+      else await safeImpact('light');
+    };
+  };
 
   const startVoiceRecording = async () => {
     if (voiceBusy) return;
@@ -290,11 +453,63 @@ export default function SpiralFlowScreen({ navigation }) {
     }
   };
 
+  const startBreathSequence = () => {
+    breathSeqCancelRef.current = { cancelled: false };
+    const token = breathSeqCancelRef.current;
+
+    const run = async () => {
+      const animateTo = (toValue, duration) =>
+        new Promise((resolve) => {
+          if (token.cancelled) return resolve();
+          Animated.timing(breathAnim, {
+            toValue,
+            duration,
+            useNativeDriver: false,
+          }).start(() => resolve());
+        });
+
+      const phase1End = Date.now() + 20000;
+      while (!token.cancelled && Date.now() < phase1End) {
+        setBreathCue('In');
+        await animateTo(0.92, 3000);
+        setBreathCue('Out');
+        await animateTo(0.18, 3000);
+      }
+
+      const phase2End = Date.now() + 30000;
+      while (!token.cancelled && Date.now() < phase2End) {
+        setBreathCue('In');
+        await animateTo(0.92, 3500);
+        setBreathCue('Out');
+        await animateTo(0.18, 4500);
+      }
+
+      const phase3End = Date.now() + 40000;
+      while (!token.cancelled && Date.now() < phase3End) {
+        setBreathCue('In');
+        await animateTo(0.78, 2000);
+        setBreathCue('Top up');
+        await animateTo(0.92, 1000);
+        setBreathCue('Out');
+        await animateTo(0.18, 8000);
+        setBreathCue('Pause');
+        await animateTo(0.18, 2000);
+      }
+
+      setBreathCue('');
+    };
+
+    run();
+  };
+
   const runSigh90 = async () => {
     await syncProgress({ current_step: STEPS.sigh1 });
 
+    startBreathSequence();
+
     startTimer(90, sighIntervalRef, setSighRemaining, async () => {
-      setStep(STEPS.bodyScan);
+      breathSeqCancelRef.current.cancelled = true;
+      goToStep(STEPS.bodyScan);
     });
   };
 
@@ -302,7 +517,127 @@ export default function SpiralFlowScreen({ navigation }) {
     await syncProgress({ current_step: STEPS.closureSigh });
 
     startTimer(30, closureIntervalRef, setClosureSighRemaining, async () => {
-      setStep(STEPS.closureCheck);
+      goToStep(STEPS.closureCheck);
+    });
+  };
+
+  const runMicroCheck = async ({ seconds, text, nextStep }) => {
+    await syncProgress({ current_step: STEPS.microCheck });
+
+    setMicroCheckText(text);
+    setMicroCheckLine2('');
+
+    if (microCheckTextTimersRef.current?.length) {
+      microCheckTextTimersRef.current.forEach((t) => clearTimeout(t));
+      microCheckTextTimersRef.current = [];
+    }
+
+    try {
+      await safeImpact('light');
+    } catch {}
+
+    microCheckGlowChest.setValue(0);
+    microCheckGlowBelly.setValue(0);
+    microCheckGlowBoth.setValue(0);
+    microCheckBreath.setValue(0);
+
+    if (reduceMotion) {
+      setMicroCheckLine2('Feel your feet on the floor.');
+      microCheckTextTimersRef.current = [
+        setTimeout(() => {
+          setMicroCheckLine2('One slow breath with me.');
+        }, 2000),
+      ];
+
+      stopTimer(microCheckIntervalRef, setMicroCheckRemaining);
+      startTimer(seconds, microCheckIntervalRef, setMicroCheckRemaining, async () => {
+        try {
+          await safeImpact('medium');
+        } catch {}
+        goToStep(nextStep);
+      });
+      return;
+    }
+
+    Animated.sequence([
+      Animated.timing(microCheckGlowChest, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(1700),
+      Animated.timing(microCheckGlowChest, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(microCheckGlowBelly, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(1700),
+      Animated.timing(microCheckGlowBelly, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(microCheckGlowBoth, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+
+    microCheckPulse.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(microCheckGlowBoth, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(microCheckGlowBoth, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+      ]),
+      { iterations: 5 }
+    );
+    microCheckPulse.current.start();
+
+    Animated.sequence([
+      Animated.delay(4000),
+      Animated.timing(microCheckBreath, { toValue: 1, duration: 3000, useNativeDriver: true }),
+      Animated.timing(microCheckBreath, { toValue: 0, duration: 5000, useNativeDriver: true }),
+    ]).start();
+
+    microCheckTextTimersRef.current = [
+      setTimeout(() => {
+        setMicroCheckLine2('Feel your feet on the floor.');
+      }, 2000),
+      setTimeout(() => {
+        setMicroCheckLine2('One slow breath with me.');
+      }, 4000),
+    ];
+
+    stopTimer(microCheckIntervalRef, setMicroCheckRemaining);
+    startTimer(seconds, microCheckIntervalRef, setMicroCheckRemaining, async () => {
+      try {
+        await safeImpact('medium');
+      } catch {}
+      goToStep(nextStep);
+    });
+  };
+
+  const runCompassionPause = async () => {
+    await syncProgress({ current_step: STEPS.compassionPause });
+
+    try {
+      await safeImpact('light');
+    } catch {}
+
+    compassionChest.setValue(0);
+
+    if (!reduceMotion) {
+      compassionPulse.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(compassionChest, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(compassionChest, { toValue: 0.25, duration: 900, useNativeDriver: true }),
+        ]),
+        { iterations: 6 }
+      );
+      compassionPulse.current.start();
+    } else {
+      compassionChest.setValue(0.5);
+    }
+
+    stopTimer(compassionIntervalRef, setCompassionRemaining);
+    startTimer(10, compassionIntervalRef, setCompassionRemaining, async () => {
+      try {
+        await safeImpact('medium');
+      } catch {}
+
+      const next = [...answers];
+      next[1] = next[1] || 'Hand on heart (10s)';
+      setAnswers(next);
+      await syncProgress({ path_answers: next });
+
+      compassionDoneRef.current = true;
+      setPromptIndex(2);
+      goToStep(STEPS.path);
     });
   };
 
@@ -381,8 +716,20 @@ export default function SpiralFlowScreen({ navigation }) {
       current_step: STEPS.path,
     });
 
-    setStep(STEPS.path);
+    goToStep(STEPS.path);
   };
+
+  useEffect(() => {
+    const path = pathDecision?.path || null;
+    if (!path) return;
+    if (path !== 'COMPASSION') return;
+    if (step !== STEPS.path) return;
+    if (promptIndex !== 1) return;
+    if (compassionDoneRef.current) return;
+
+    goToStep(STEPS.compassionPause);
+    runCompassionPause();
+  }, [step, promptIndex, pathDecision]);
 
   const submitPromptAnswer = async () => {
     const nextAnswers = [...answers];
@@ -394,13 +741,30 @@ export default function SpiralFlowScreen({ navigation }) {
     await syncProgress({ path_answers: nextAnswers });
 
     if (pathDecision?.path === 'CRISIS') {
-      setStep(STEPS.anchor);
+      goToStep(STEPS.anchor);
       return;
     }
 
     if (nextIdx >= 3) {
-      setStep(STEPS.closureSigh);
+      goToStep(STEPS.closureSigh);
       runClosureSigh();
+      return;
+    }
+
+    const path = pathDecision?.path || 'CLARITY';
+
+    const shouldMicroCheck =
+      path !== 'ACT' &&
+      ((path === 'CLARITY' && nextIdx === 2) || (path !== 'CLARITY' && nextIdx === 1));
+
+    if (shouldMicroCheck) {
+      setPromptIndex(nextIdx);
+      goToStep(STEPS.microCheck);
+      runMicroCheck({
+        seconds: 12,
+        text: 'Quick reset.',
+        nextStep: STEPS.path,
+      });
       return;
     }
 
@@ -456,7 +820,7 @@ export default function SpiralFlowScreen({ navigation }) {
       intensity_post: intensityPost,
     });
 
-    setStep(STEPS.anchor);
+    goToStep(STEPS.anchor);
   };
 
   const finish = async () => {
@@ -479,16 +843,14 @@ export default function SpiralFlowScreen({ navigation }) {
       });
     } catch {}
 
-    navigation.goBack();
+    setCompletionPhase(1);
+    goToStep(STEPS.completion);
   };
 
-  const renderProgress = () => {
+  const renderPhaseMeta = () => {
     return (
-      <View style={styles.progressWrap}>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{progress}%</Text>
+      <View style={styles.phaseMetaWrap}>
+        <Text style={styles.phaseMetaText}>{`${phaseMeta.label} • ${phaseMeta.time}`}</Text>
       </View>
     );
   };
@@ -496,7 +858,13 @@ export default function SpiralFlowScreen({ navigation }) {
   const renderHeaderRow = () => {
     return (
       <View style={styles.headerRow}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.headerChip}>
+        <Pressable
+          onPress={() => {
+            breathSeqCancelRef.current.cancelled = true;
+            navigation.goBack();
+          }}
+          style={styles.headerChip}
+        >
           <Text style={styles.headerChipText}>Exit</Text>
         </Pressable>
       </View>
@@ -505,75 +873,134 @@ export default function SpiralFlowScreen({ navigation }) {
 
   const renderArrival = () => {
     return (
-      <Screen>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>{greeting || '...'}</Title>
-        <Body style={{ marginTop: 10, marginBottom: 14 }}>
-          In 3 minutes: calm your body, understand the spiral, get one clear next step.
-        </Body>
-        <Body style={{ marginBottom: 22, color: COLORS.muted }}>
-          Put both feet flat on the floor. Feel them touching the ground.
-        </Body>
-        {!!sessionError && <Body style={{ marginBottom: 10, color: '#F9E66A' }}>{sessionError}</Body>}
-        <PrimaryButton
-          label={loading ? 'Loading…' : "I'm ready"}
-          disabled={loading}
-          onPress={async () => {
-            setStep(STEPS.sigh1);
-            runSigh90();
-          }}
-        />
-      </Screen>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>{greeting || '...'}</Title>
+          <Guidance style={{ marginTop: 16 }}>
+            In 3 minutes: calm your body, understand the spiral, get one clear next step.
+          </Guidance>
+          <Context style={{ marginTop: 12, marginBottom: 24 }}>
+            Put both feet flat on the floor. Feel them touching the ground.
+          </Context>
+          {!!sessionError && <Context style={{ marginBottom: 10, color: COLORS.terracotta }}>{sessionError}</Context>}
+          <PrimaryButton
+            label={loading ? 'Loading…' : "I'm ready"}
+            disabled={loading}
+            onPress={async () => {
+              goToStep(STEPS.sigh1);
+              runSigh90();
+            }}
+          />
+        </Screen>
+      </Animated.View>
     );
   };
 
-  const breatheCueFor = (remaining, total) => {
-    const elapsed = total - remaining;
-    const phase = elapsed % 6;
-    if (phase === 0 || phase === 1) return 'In';
-    if (phase === 2) return 'In again';
-    return 'Out slow';
+  const renderLungs = () => {
+    const fill = breathAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.08, 0.55],
+    });
+
+    const scale = breathAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.92, 1.04],
+    });
+
+    return (
+      <Animated.View style={[styles.lungsWrap, { transform: [{ scale }] }]}>
+        <View style={styles.lungsRow}>
+          <View style={styles.lungShell}>
+            <Animated.View style={[styles.lungFill, { opacity: fill }]} />
+          </View>
+          <View style={styles.lungShell}>
+            <Animated.View style={[styles.lungFill, { opacity: fill }]} />
+          </View>
+        </View>
+        <Text style={styles.lungsLabel}>Your lungs</Text>
+      </Animated.View>
+    );
   };
 
   const renderSigh = () => {
     const remaining = sighRemaining ?? 90;
-    const cue = breatheCueFor(remaining, 90);
 
     return (
-      <Screen center>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>Physiological sigh</Title>
-        <Body style={{ marginTop: 8, marginBottom: 18, color: COLORS.muted }}>
-          Two quick inhales, one long exhale.
-        </Body>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen center>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>One breath with me</Title>
+          <Guidance style={{ marginTop: 16, marginBottom: 24, textAlign: 'center' }}>
+            Follow the lungs. We’ll start fast, then slow.
+          </Guidance>
 
-        <View style={styles.sighCard}>
-          <Text style={styles.sighCue}>{cue}</Text>
-          <Text style={styles.sighTimer}>{formatSeconds(remaining)}</Text>
-        </View>
+          {renderLungs()}
 
-        <SecondaryButton
-          label="Skip"
-          onPress={() => {
-            stopTimer(sighIntervalRef, setSighRemaining);
-            setStep(STEPS.bodyScan);
-          }}
-        />
-      </Screen>
+          <View style={styles.breathStatusRow}>
+            <Text style={styles.breathCue}>{breathCue || ' '}</Text>
+            <Text style={styles.breathTimer}>{formatSeconds(remaining)}</Text>
+          </View>
+
+          <SecondaryButton
+            label="Skip"
+            onPress={() => {
+              stopTimer(sighIntervalRef, setSighRemaining);
+              breathSeqCancelRef.current.cancelled = true;
+              goToStep(STEPS.bodyScan);
+            }}
+          />
+        </Screen>
+      </Animated.View>
+    );
+  };
+
+  const renderMicroCheck = () => {
+    const breathScale = microCheckBreath.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.6, 1.15],
+    });
+    return (
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen center>
+          {renderHeaderRow()}
+          <Guidance style={{ marginTop: 16, textAlign: 'center' }}>{microCheckText}</Guidance>
+          {!!microCheckLine2 && (
+            <Guidance style={{ marginTop: 10, textAlign: 'center' }}>{microCheckLine2}</Guidance>
+          )}
+          <View style={styles.torsoWrap}>
+            <View style={styles.torsoOutline}>
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.torsoGlowChest, { opacity: microCheckGlowChest }]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.torsoGlowBelly, { opacity: microCheckGlowBelly }]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.torsoGlowBoth, { opacity: microCheckGlowBoth }]}
+              />
+            </View>
+          </View>
+
+          <Animated.View style={[styles.breathLine, { transform: [{ scaleX: breathScale }] }]} />
+        </Screen>
+      </Animated.View>
     );
   };
 
   const renderBodyScan = () => {
     return (
-      <Screen>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>Where do you feel it?</Title>
-        <Body style={{ marginTop: 10, marginBottom: 14, color: COLORS.muted }}>
-          Tap one location.
-        </Body>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>Where do you feel it?</Title>
+          <Guidance style={{ marginTop: 16, marginBottom: 24 }}>Tap one location.</Guidance>
 
         <View style={styles.grid}>
           {BODY_LOCATIONS.map((b) => {
@@ -592,52 +1019,67 @@ export default function SpiralFlowScreen({ navigation }) {
 
         {!!bodyText && <Body style={{ marginTop: 14, marginBottom: 18 }}>{bodyText}</Body>}
 
-        <Subtitle style={{ marginTop: 4 }}>Intensity</Subtitle>
+        <Subtitle style={{ marginTop: 16 }}>Intensity</Subtitle>
         <Text style={styles.intensityValue}>{intensityPre}</Text>
         <Slider
           minimumValue={0}
           maximumValue={10}
           step={1}
           value={intensityPre}
-          onValueChange={(v) => setIntensityPre(v)}
+          onValueChange={withSliderHaptics(setIntensityPre)}
           minimumTrackTintColor={COLORS.primary}
-          maximumTrackTintColor="rgba(255,255,255,0.2)"
+          maximumTrackTintColor="rgba(248,249,250,0.15)"
           thumbTintColor={COLORS.primary}
         />
 
-        {!!sessionError && <Body style={{ marginBottom: 10, color: '#F9E66A' }}>{sessionError}</Body>}
-        <PrimaryButton
-          label="Continue"
-          disabled={!bodyLocationPre}
-          onPress={async () => {
-            await syncProgress({ current_step: STEPS.bodyScan, intensity_pre: intensityPre });
-            setStep(STEPS.spiralText);
-          }}
-        />
-      </Screen>
+        {!!sessionError && <Context style={{ marginBottom: 10, color: COLORS.terracotta }}>{sessionError}</Context>}
+          <PrimaryButton
+            label="Continue"
+            disabled={!bodyLocationPre}
+            onPress={async () => {
+              await syncProgress({ current_step: STEPS.bodyScan, intensity_pre: intensityPre });
+              goToStep(STEPS.spiralText);
+            }}
+          />
+        </Screen>
+      </Animated.View>
     );
   };
 
   const renderSpiralText = () => {
+    const words = countWords(spiralText);
+    const enough = words >= 5;
+
     return (
-      <Screen scrollable>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>What’s the thought loop?</Title>
-        <Body style={{ marginTop: 10, marginBottom: 10, color: COLORS.muted }}>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen scrollable>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>What’s the thought loop?</Title>
+        <Guidance style={{ marginTop: 16 }}>
           Don’t make it perfect. The sentence that keeps replaying.
-        </Body>
+        </Guidance>
+        <Context style={{ marginTop: 12, marginBottom: 24 }}>
+          If you freeze, copy the example and change one word.
+        </Context>
 
         <TextInput
           value={spiralText}
           onChangeText={setSpiralText}
-          placeholder="Type it here…"
-          placeholderTextColor="rgba(248,249,250,0.35)"
+          placeholder={spiralPlaceholder}
+          placeholderTextColor="rgba(248,249,250,0.55)"
           multiline
-          style={styles.textArea}
+          onFocus={() => setSpiralFocused(true)}
+          onBlur={() => setSpiralFocused(false)}
+          style={[styles.textArea, spiralFocused && styles.textAreaFocused]}
         />
 
-        {!!voiceError && <Body style={{ marginTop: 10, color: '#F9E66A' }}>{voiceError}</Body>}
+        <View style={styles.inputMetaRow}>
+          <Text style={styles.wordCount}>{`${words} words`}</Text>
+          {enough ? <Text style={styles.enoughTag}>✓ That's enough to work with</Text> : <Text style={styles.enoughTagMuted}> </Text>}
+        </View>
+
+        {!!voiceError && <Context style={{ marginTop: 10, color: COLORS.terracotta }}>{voiceError}</Context>}
 
         <View style={{ marginTop: 12 }}>
           {!voiceRecording ? (
@@ -647,10 +1089,11 @@ export default function SpiralFlowScreen({ navigation }) {
           )}
         </View>
 
-        {!!sessionError && <Body style={{ marginTop: 10, color: '#F9E66A' }}>{sessionError}</Body>}
+        {!!sessionError && <Context style={{ marginTop: 10, color: COLORS.terracotta }}>{sessionError}</Context>}
 
-        <PrimaryButton label="Continue" onPress={analyzeSpiral} />
-      </Screen>
+          <PrimaryButton label="Continue" onPress={analyzeSpiral} />
+        </Screen>
+      </Animated.View>
     );
   };
 
@@ -679,15 +1122,16 @@ export default function SpiralFlowScreen({ navigation }) {
         : currentPrompt;
 
     return (
-      <Screen scrollable>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>{title}</Title>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen scrollable>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>{title}</Title>
         {!!pathDecision?.reasoning && (
-          <Body style={{ marginTop: 8, marginBottom: 8, color: COLORS.muted }}>{pathDecision.reasoning}</Body>
+          <Context style={{ marginTop: 12 }}>{pathDecision.reasoning}</Context>
         )}
 
-        <Subtitle style={{ marginTop: 10, marginBottom: 8 }}>{displayPrompt}</Subtitle>
+        <Subtitle style={{ marginTop: 24, marginBottom: 12 }}>{displayPrompt}</Subtitle>
 
         {path === 'CRISIS' ? (
           <View style={styles.crisisBox}>
@@ -707,56 +1151,58 @@ export default function SpiralFlowScreen({ navigation }) {
               setAnswers(next);
             }}
             placeholder="Write a few words…"
-            placeholderTextColor="rgba(248,249,250,0.35)"
+            placeholderTextColor="rgba(248,249,250,0.55)"
             multiline
             style={styles.textArea}
           />
         )}
 
-        <PrimaryButton
-          label={promptIndex === 2 ? 'Continue' : 'Next'}
-          onPress={submitPromptAnswer}
-        />
-      </Screen>
+          <PrimaryButton
+            label={promptIndex === 2 ? 'Continue' : 'Next'}
+            onPress={submitPromptAnswer}
+          />
+        </Screen>
+      </Animated.View>
     );
   };
 
   const renderClosureSigh = () => {
     const remaining = closureSighRemaining ?? 30;
-    const cue = breatheCueFor(remaining, 30);
+    const cue = remaining > 20 ? 'In' : remaining > 10 ? 'Out' : 'In';
 
     return (
-      <Screen center>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>Closing breaths</Title>
-        <Body style={{ marginTop: 8, marginBottom: 18, color: COLORS.muted }}>Three cycles.</Body>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen center>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>Closing breaths</Title>
+        <Guidance style={{ marginTop: 16, marginBottom: 24, textAlign: 'center' }}>Three cycles.</Guidance>
 
         <View style={styles.sighCard}>
           <Text style={styles.sighCue}>{cue}</Text>
           <Text style={styles.sighTimer}>{formatSeconds(remaining)}</Text>
         </View>
 
-        <SecondaryButton
-          label="Skip"
-          onPress={() => {
-            stopTimer(closureIntervalRef, setClosureSighRemaining);
-            setStep(STEPS.closureCheck);
-          }}
-        />
-      </Screen>
+          <SecondaryButton
+            label="Skip"
+            onPress={() => {
+              stopTimer(closureIntervalRef, setClosureSighRemaining);
+              goToStep(STEPS.closureCheck);
+            }}
+          />
+        </Screen>
+      </Animated.View>
     );
   };
 
   const renderClosureCheck = () => {
     return (
-      <Screen>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>Check in again</Title>
-        <Body style={{ marginTop: 10, marginBottom: 14, color: COLORS.muted }}>
-          Tap the main place you feel it now.
-        </Body>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>Check in again</Title>
+        <Guidance style={{ marginTop: 16, marginBottom: 24 }}>Tap the main place you feel it now.</Guidance>
 
         <View style={styles.grid}>
           {BODY_LOCATIONS.map((b) => {
@@ -780,25 +1226,27 @@ export default function SpiralFlowScreen({ navigation }) {
           maximumValue={10}
           step={1}
           value={intensityPost}
-          onValueChange={(v) => setIntensityPost(v)}
+          onValueChange={withSliderHaptics(setIntensityPost)}
           minimumTrackTintColor={COLORS.primary}
-          maximumTrackTintColor="rgba(255,255,255,0.2)"
+          maximumTrackTintColor="rgba(248,249,250,0.15)"
           thumbTintColor={COLORS.primary}
         />
 
-        {!!sessionError && <Body style={{ marginTop: 10, color: '#F9E66A' }}>{sessionError}</Body>}
+        {!!sessionError && <Context style={{ marginTop: 10, color: COLORS.terracotta }}>{sessionError}</Context>}
 
-        <PrimaryButton label="Continue" onPress={fetchClosureValidation} />
-      </Screen>
+          <PrimaryButton label="Continue" onPress={fetchClosureValidation} />
+        </Screen>
+      </Animated.View>
     );
   };
 
   const renderAnchor = () => {
     return (
-      <Screen scrollable>
-        {renderHeaderRow()}
-        {renderProgress()}
-        <Title>Next time this spiral starts, what will you do first?</Title>
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen scrollable>
+          {renderHeaderRow()}
+          {renderPhaseMeta()}
+          <Title>Next time this spiral starts, what will you do first?</Title>
         {!!closureText && <Body style={{ marginTop: 10, marginBottom: 18 }}>{closureText}</Body>}
 
         <View style={styles.anchorList}>
@@ -825,21 +1273,82 @@ export default function SpiralFlowScreen({ navigation }) {
           })}
         </View>
 
-        {!!sessionError && <Body style={{ marginTop: 10, color: '#F9E66A' }}>{sessionError}</Body>}
+        {!!sessionError && <Context style={{ marginTop: 10, color: COLORS.terracotta }}>{sessionError}</Context>}
 
-        <PrimaryButton label="Finish" onPress={finish} />
-      </Screen>
+          <PrimaryButton label="Finish" onPress={finish} />
+        </Screen>
+      </Animated.View>
     );
   };
+
+  const renderCompletion = () => {
+    const text =
+      typeof intensityPre === 'number' && typeof intensityPost === 'number' && intensityPost < intensityPre
+        ? `Your body came down ${intensityPre - intensityPost} points. You did that.`
+        : 'You stayed with it. That’s the practice.';
+
+    return (
+      <Animated.View style={{ flex: 1, opacity: transitionOpacity }}>
+        <Screen center>
+          {renderPhaseMeta()}
+          {completionPhase === 1 ? (
+            <>
+              <Title>One final breath</Title>
+              <Guidance style={{ marginTop: 16, textAlign: 'center' }}>In slowly for five seconds.</Guidance>
+              <View style={{ marginTop: 24 }}>{renderLungs()}</View>
+              <Context style={{ marginTop: 6, textAlign: 'center' }}> </Context>
+            </>
+          ) : (
+            <>
+              <Title>✓</Title>
+              <Guidance style={{ marginTop: 16, textAlign: 'center' }}>You regulated. You’re building the skill.</Guidance>
+              <Context style={{ marginTop: 12, textAlign: 'center' }}>{text}</Context>
+              <PrimaryButton
+                label="Done"
+                onPress={async () => {
+                  try {
+                    await safeImpact('medium');
+                    await safeImpact('light');
+                    await safeImpact('light');
+                  } catch {}
+                  navigation.goBack();
+                }}
+              />
+            </>
+          )}
+        </Screen>
+      </Animated.View>
+    );
+  };
+
+  useEffect(() => {
+    if (step !== STEPS.completion) return;
+    if (reduceMotion) {
+      setCompletionPhase(2);
+      return;
+    }
+
+    setCompletionPhase(1);
+    Animated.timing(breathAnim, { toValue: 0.18, duration: 0, useNativeDriver: false }).start();
+    Animated.timing(breathAnim, { toValue: 0.92, duration: 5000, useNativeDriver: false }).start();
+
+    const t = setTimeout(() => {
+      setCompletionPhase(2);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [step, reduceMotion]);
 
   if (step === STEPS.arrival) return renderArrival();
   if (step === STEPS.sigh1) return renderSigh();
   if (step === STEPS.bodyScan) return renderBodyScan();
   if (step === STEPS.spiralText) return renderSpiralText();
   if (step === STEPS.path) return renderPath();
+  if (step === STEPS.microCheck) return renderMicroCheck();
+  if (step === STEPS.compassionPause) return renderCompassionPause();
   if (step === STEPS.closureSigh) return renderClosureSigh();
   if (step === STEPS.closureCheck) return renderClosureCheck();
-  return renderAnchor();
+  if (step === STEPS.anchor) return renderAnchor();
+  return renderCompletion();
 }
 
 const styles = StyleSheet.create({
@@ -854,32 +1363,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(248,249,250,0.12)',
-    backgroundColor: 'rgba(21,34,56,0.55)',
+    borderColor: COLORS.faint,
+    backgroundColor: COLORS.surface,
   },
   headerChipText: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '600',
   },
-  progressWrap: {
-    marginBottom: 18,
+  phaseMetaWrap: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
   },
-  progressTrack: {
-    height: 6,
-    backgroundColor: 'rgba(248,249,250,0.12)',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 6,
-    backgroundColor: COLORS.primary,
-  },
-  progressText: {
-    marginTop: 6,
+  phaseMetaText: {
     color: COLORS.muted,
     fontSize: 12,
-    textAlign: 'right',
+    fontWeight: '500',
   },
   grid: {
     flexDirection: 'row',
@@ -890,13 +1390,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: 'rgba(21,34,56,0.9)',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: 'rgba(248,249,250,0.12)',
+    borderColor: COLORS.faint,
   },
   pillSelected: {
     borderColor: 'rgba(42,157,143,0.9)',
-    backgroundColor: 'rgba(42,157,143,0.12)',
+    backgroundColor: 'rgba(42,157,143,0.10)',
   },
   pillText: {
     color: 'rgba(248,249,250,0.85)',
@@ -914,25 +1414,49 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   textArea: {
-    backgroundColor: 'rgba(21,34,56,0.85)',
+    backgroundColor: COLORS.inputBg,
     borderWidth: 1,
-    borderColor: 'rgba(248,249,250,0.12)',
+    borderColor: 'rgba(248,249,250,0.10)',
     borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    minHeight: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 80,
     color: COLORS.text,
     fontSize: 16,
     lineHeight: 22,
+  },
+  textAreaFocused: {
+    borderWidth: 2,
+    borderColor: 'rgba(42,157,143,0.40)',
+  },
+  inputMetaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  wordCount: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  enoughTag: {
+    color: 'rgba(42,157,143,0.85)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  enoughTagMuted: {
+    color: 'transparent',
+    fontSize: 12,
   },
   sighCard: {
     width: '100%',
     borderRadius: 18,
     paddingVertical: 22,
     paddingHorizontal: 18,
-    backgroundColor: 'rgba(21,34,56,0.85)',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: 'rgba(248,249,250,0.12)',
+    borderColor: COLORS.faint,
     alignItems: 'center',
   },
   sighCue: {
@@ -945,6 +1469,102 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 16,
     fontWeight: '600',
+  },
+  lungsWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  lungsLabel: {
+    marginTop: 10,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  lungsRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  lungShell: {
+    width: 108,
+    height: 140,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(248,249,250,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    overflow: 'hidden',
+  },
+  lungFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(42,157,143,0.75)',
+  },
+  breathStatusRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    marginBottom: 10,
+  },
+  breathCue: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  breathTimer: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  torsoWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  torsoOutline: {
+    width: 160,
+    height: 220,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: 'rgba(248,249,250,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    overflow: 'hidden',
+  },
+  torsoGlowChest: {
+    position: 'absolute',
+    top: 44,
+    left: 28,
+    right: 28,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(42,157,143,0.30)',
+  },
+  torsoGlowBelly: {
+    position: 'absolute',
+    top: 110,
+    left: 34,
+    right: 34,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(42,157,143,0.30)',
+  },
+  torsoGlowBoth: {
+    position: 'absolute',
+    top: 44,
+    left: 28,
+    right: 28,
+    height: 126,
+    borderRadius: 40,
+    backgroundColor: 'rgba(42,157,143,0.22)',
+  },
+  breathLine: {
+    marginTop: 18,
+    width: 120,
+    height: 3,
+    borderRadius: 99,
+    borderWidth: 1,
+    borderColor: 'rgba(42,157,143,0.85)',
+    backgroundColor: 'rgba(42,157,143,0.10)',
   },
   crisisBox: {
     marginTop: 10,
@@ -962,9 +1582,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(21,34,56,0.85)',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: 'rgba(248,249,250,0.12)',
+    borderColor: COLORS.faint,
   },
   anchorItemRec: {
     borderColor: 'rgba(42,157,143,0.6)',
